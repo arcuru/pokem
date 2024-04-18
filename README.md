@@ -3,18 +3,39 @@
 This is a (partial) [ntfy.sh](https://ntfy.sh) clone using Matrix.
 
 This runs a Matrix bot account that pings you on Matrix when it's called.
+It can be run standalone, or it can run as a daemon and listen for HTTP requests.
 
 That's it.
+
+If you want to use my default instance at https://pokem.jackson.dev, you don't need to install anything.
+
+Status: Alpha
 
 It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot framework in Rust.
 
 ## Usage
 
-1. On Matrix, create a room and invite the bot account.
-2. Grab the Matrix Room ID from your client.
-3. Call `pokem` using the room ID and your desired message.
+I run an endpoint and associated bot account at https://pokem.jackson.dev.
+`pokem` will default to that instance if you have not configured the server settings.
 
-`pokem` will login to the bot account and send the message to the room given.
+You can run your own instance (using `pokem --daemon`), but here I'll describe using pokem.jackson.dev
+
+1. On Matrix, create a room and invite the bot account, [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev).
+2. Grab the Matrix Room ID from the welcome message or from your client.
+3. Run `curl --fail -d "Backup successful 😀" pokem.jackson.dev/<room id>`. Or use `pokem <room id> <message>`.
+4. The `curl` or `pokem` commands will block until the message is sent, and will return an error if there is a problem.
+
+`pokem`, like `ntfy`, listens to HTTP PUT/POST requests, so it's easy to send a message.
+If you'd like more examples, just look at the [ntfy docs](https://docs.ntfy.sh/#step-2-send-a-message) and use the Matrix Room ID instead of the ntfy "topic".
+
+If you use the `pokem` CLI, you can set a `default_room` in the config file, and then you don't need to specify it in commands.
+`pokem Backup Successful 😀` will be all you need.
+
+### Limitations
+
+1. The pokem.jackson.dev instance is configured to never send messages to rooms larger than 5 people to avoid spam.
+2. You should not rely on it to have more than 1 9 of reliability.
+3. There may be usage limits in the future.
 
 ## Install
 
@@ -22,21 +43,77 @@ It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot f
 
 For [Nix](https://nixos.org/) users, this repo contains a Nix flake. See the [setup section](#nix) for details on configuring.
 
+## Examples
+
+Here are some things you could do with this:
+
+### Alert Everywhere
+
+1. Run the bot account on a homeserver with bridges configured.
+2. Have the bot account login to anywhere else with a bridge (Discord, Slack, IRC, iMessage, etc).
+3. Use this to ping the Discord/Slack/IRC room using the bridge.
+
+### Script Your Own Messages
+
+1. Give `pokem` _your_ login info.
+2. Send any message to a room of your choice as yourself. e.g. `pokem <room> I'm running late`
+
+## Comparison with ntfy.sh
+
+### Cons
+
+1. Way fewer features. `pokem` only does text pings on Matrix.
+2. Fewer integrations. `pokem` is limited to only Matrix and things bridged to Matrix.
+
+### Pros
+
+1. Secure room topics by default. Nobody else can subscribe to the messages even with the key (although they could _send_ them).
+2. You don't need a separate app, just use your existing Matrix client.
+
 ## Setup
 
-First, setup an account on any Matrix server for the bot to use.
+Using your own bot account will require setup, otherwise there is no setup required.
 
-Create a config file for the bot with its login info.
+`pokem` the CLI tool runs down this list until it finds something to do:
 
-**IMPORTANT**: Make sure that you setup your allow_list or the bot will not respond to invites
+1. `pokem --daemon` runs it as a daemon, listening for HTTP messages.
+2. If there is no server or matrix login configured, it will send the request to the `pokem.jackson.dev` instance.
+3. `pokem` with a server configured will send a PUT request to the server. On a failure, it will fallback to trying with a a Matrix login.
+4. If there is a Matrix login configured, the CLI will attempt to login to Matrix itself.
+
+Here is the config file skeleton.
+It can be placed in $XDG_CONFIG_HOME/pokem/config.yaml or passed via `pokem --config ~/path/to/config.yaml`.
 
 ```yaml
-homeserver_url: https://matrix.org
-username: "pokem"
-password: "" # Optional, if not given it will ask for it on first run
-allow_list: "" # Regex for allowed accounts.
-room_size_limit: 0 # Optional, set a room size limit, will not send notifications to rooms larger than this
-state_dir: "$XDG_STATE_HOME/pokem" # Optional, for setting the pokem state directory
+# Optional, for setting a default room
+# When sending messages as a client, it will send to this room if none is given
+default_room:
+  !RoomID:jackson.dev # Optional, customize the location of the pokem service
+
+server:
+  url: https://pokem.jackson.dev
+  # Optional, customize the port if necessary
+  port: 80
+
+# Optional, if you want to login to your own Matrix account
+# You will need to create the bot account manually
+matrix:
+  homeserver_url: https://matrix.jackson.dev
+  username: "pokem"
+  # Optional, will ask on first run
+  #password: ""
+  # Optional, but necessary for use
+  #allow_list: ".*"
+  # Optional, the max size of the room to message
+  #room_size_limit: 5
+  # Optional, customize the state directory for the Matrix login data
+  # Defaults to $XDG_STATE_HOME/pokem
+  #state_dir:
+
+# Optional, to define the bindings when running as a service
+daemon:
+  addr: "0.0.0.0"
+  port: 80
 ```
 
 ### Nix
@@ -57,7 +134,7 @@ To use, add it to your inputs:
 
 And then add the overlay `inputs.pokem.overlays.default` to your pkgs.
 
-The flake also contains a home-manager module for installing pokem as a service.
+The flake also contains a home-manager module for installing the daemon as a service.
 Import the module into your home-manager config and you can configure `pokem` all from within nix:
 
 ```nix

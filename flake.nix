@@ -128,8 +128,9 @@
           };
         };
 
-      packages = {
+      packages = rec {
         inherit pokem;
+        default = pokem;
       };
 
       apps = rec {

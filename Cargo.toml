@@ -14,9 +14,8 @@ name = "pokem"
 test = false
 
 [dependencies]
-headjack = "0.2.0"
+headjack = { git = "https://github.com/arcuru/headjack.git", rev = "6aabb60475aa" }
 anyhow = "1"
-tokio = { version = "1.24.2", features = ["macros", "rt-multi-thread"] }
 tracing-subscriber = "0.3.15"
 tracing = "0.1.40"
 matrix-sdk = "0.7.1"
@@ -26,3 +25,8 @@ clap = { version = "4.2.1", features = ["derive"] }
 lazy_static = "1.4.0"
 regex = "1.10.3"
 dirs = "5.0.1"
+hyper = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full"] }
+http-body-util = "0.1"
+hyper-util = { version = "0.1", features = ["full"] }
+reqwest = "0.12.3"
