@@ -8,6 +8,7 @@ license = "MIT"
 description = "Pok'em, a notification helper bot for Matrix."
 repository = "https://github.com/arcuru/pokem"
 homepage = "https://github.com/arcuru/pokem"
+categories =["command-line-utilities"]
 
 [[bin]]
 name = "pokem"
