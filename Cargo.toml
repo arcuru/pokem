@@ -1,0 +1,28 @@
+[package]
+name = "pokem"
+version = "0.1.0"
+edition = "2021"
+authors = ["Patrick Jackson <patrick@jackson.dev>"]
+readme = "README.md"
+license = "MIT"
+description = "Pok'em, a notification helper bot for Matrix."
+repository = "https://github.com/arcuru/pokem"
+homepage = "https://github.com/arcuru/pokem"
+
+[[bin]]
+name = "pokem"
+test = false
+
+[dependencies]
+headjack = "0.2.0"
+anyhow = "1"
+tokio = { version = "1.24.2", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = "0.3.15"
+tracing = "0.1.40"
+matrix-sdk = "0.7.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+clap = { version = "4.2.1", features = ["derive"] }
+lazy_static = "1.4.0"
+regex = "1.10.3"
+dirs = "5.0.1"
