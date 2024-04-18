@@ -80,7 +80,7 @@ struct MatrixConfig {
     state_dir: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct Config {
     /// Configuration for logging in and messaging on Matrix
     matrix: Option<MatrixConfig>,
@@ -106,26 +106,41 @@ lazy_static! {
     static ref GLOBAL_BOT: Mutex<Option<Bot>> = Mutex::new(None);
 }
 
+/// Get the config from the file or load the default config
+fn get_config_or_default(path: &Option<PathBuf>) -> Config {
+    let mut file = {
+        if let Some(config) = path {
+            match File::open(config) {
+                Ok(file) => file,
+                Err(_) => {
+                    return Config::default();
+                }
+            }
+        } else {
+            let mut config = dirs::config_dir().unwrap();
+            config.push("pokem");
+            config.push("config.yaml");
+            match File::open(config) {
+                Ok(file) => file,
+                Err(_) => {
+                    return Config::default();
+                }
+            }
+        }
+    };
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+
+    serde_yaml::from_str(&contents).unwrap()
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
     // Read in the config file
     let args = PokemArgs::parse();
-    let mut file = {
-        if let Some(config) = &args.config {
-            File::open(config)?
-        } else {
-            let mut config = dirs::config_dir().unwrap();
-            config.push("pokem");
-            config.push("config.yaml");
-            File::open(config)?
-        }
-    };
-    let mut contents = String::new();
-    file.read_to_string(&mut contents)?;
-
-    let config: Config = serde_yaml::from_str(&contents)?;
+    let config: Config = get_config_or_default(&args.config);
     *GLOBAL_CONFIG.lock().unwrap() = Some(config.clone());
 
     if args.daemon {
@@ -153,6 +168,25 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
+
+    if config.server.is_none() && config.matrix.is_none() {
+        // The user has set neither server nor matrix config
+        // Assume they want to use the public instance
+        info!("Sending request to pokem.jackson.dev");
+        let server = ServerConfig {
+            url: "https://pokem.jackson.dev".to_string(),
+            port: None,
+        };
+        match poke_server(&server, &room, &messages.join(" ")).await {
+            Ok(_) => {
+                info!("Successfully sent message");
+                return Ok(());
+            }
+            Err(e) => {
+                error!("Failed to send message: {:?}", e);
+            }
+        }
+    }
 
     if let Some(server) = config.server {
         info!("Sending request to server");
