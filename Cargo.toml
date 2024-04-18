@@ -14,7 +14,7 @@ name = "pokem"
 test = false
 
 [dependencies]
-headjack = { git = "https://github.com/arcuru/headjack.git", rev = "6aabb60475aa" }
+headjack = "0.3.0"
 anyhow = "1"
 tracing-subscriber = "0.3.15"
 tracing = "0.1.40"
