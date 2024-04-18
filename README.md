@@ -87,10 +87,12 @@ It can be placed in $XDG_CONFIG_HOME/pokem/config.yaml or passed via `pokem --co
 ```yaml
 # Optional, for setting a default room
 # When sending messages as a client, it will send to this room if none is given
-default_room:
-  !RoomID:jackson.dev # Optional, customize the location of the pokem service
+default_room: !RoomID:jackson.dev
+  # Optional, customize the location of the pokem service
 
-# Optional, will use pokem.jackson.dev by default
+  # Optional, will use pokem.jackson.dev by default
+
+
 server:
   url: https://pokem.jackson.dev
   # Optional, customize the port if necessary
