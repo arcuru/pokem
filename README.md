@@ -90,6 +90,7 @@ It can be placed in $XDG_CONFIG_HOME/pokem/config.yaml or passed via `pokem --co
 default_room:
   !RoomID:jackson.dev # Optional, customize the location of the pokem service
 
+# Optional, will use pokem.jackson.dev by default
 server:
   url: https://pokem.jackson.dev
   # Optional, customize the port if necessary
