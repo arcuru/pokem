@@ -6,6 +6,8 @@ use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 use matrix_sdk::{Room, RoomMemberships, RoomState};
 use serde::Deserialize;
 
+use std::collections::HashMap;
+
 use std::{fs::File, io::Read, path::PathBuf, sync::Mutex};
 use tracing::{error, info};
 
@@ -94,9 +96,10 @@ pub struct Config {
     /// Configuration for running as a daemon
     daemon: Option<DaemonConfig>,
 
-    /// Default room
-    /// When acting as a client, this room will be the default if none is given
-    default_room: Option<String>,
+    /// Save different types of rooms
+    /// Special value default will be used if no room is specified
+    /// e.g. error/warning/info/default
+    rooms: Option<HashMap<String, String>>,
 }
 
 lazy_static! {
@@ -151,17 +154,37 @@ async fn main() -> anyhow::Result<()> {
 
     let mut messages = args.message.clone().unwrap_or_default();
     let room = {
+        let rooms = config.rooms.unwrap_or_default();
         match args.room.clone() {
-            Some(room) => room,
+            Some(room) => {
+                // If the room is a room name in the config, we'll transform it to the room id
+                if let Some(room_id) = rooms.get(&room) {
+                    room_id.clone()
+                } else {
+                    room
+                }
+            }
             None => {
-                // We need to see if the first argument in messages looks like a room name
-                // If it does, we'll use that
+                // Create a regex to see if the first argument looks like a room name
                 let re = regex::Regex::new(r"!.*:.*").unwrap();
-                // If messages length is greater than 1, we'll compare the first argument to a regex
-                if messages.len() > 1 && re.is_match(&messages[0]) {
+                if messages.is_empty() {
+                    // Check if there is a default room configured
+                    // That room will be pinged with no message
+                    if let Some(room_id) = rooms.get("default") {
+                        room_id.clone()
+                    } else {
+                        return Err(anyhow::anyhow!("No room specified"));
+                    }
+                } else if re.is_match(&messages[0]) {
+                    // Use the first arg if it's a raw room id
                     messages.remove(0)
-                } else if let Some(default_room) = &config.default_room {
-                    default_room.clone()
+                } else if let Some(room_id) = rooms.get(&messages[0]) {
+                    // Check for a room name in the config
+                    messages.remove(0);
+                    room_id.clone()
+                } else if let Some(room_id) = rooms.get("default") {
+                    // Check if a default room exists
+                    room_id.clone()
                 } else {
                     return Err(anyhow::anyhow!("No room specified"));
                 }

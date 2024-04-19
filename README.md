@@ -99,9 +99,16 @@ Here is the config file skeleton.
 It can be placed in $XDG_CONFIG_HOME/pokem/config.yaml or passed via `pokem --config ~/path/to/config.yaml`.
 
 ```yaml
-# Optional, for setting a default room
-# When sending messages as a client, it will send to this room if none is given
-default_room: "!RoomID:jackson.dev"
+# Optional, for creating room shorthands
+# These can be used in place of the raw room IDs
+# e.g. `pokem error The backup failed!` will send "The backup failed!" to the room named "error"
+rooms:
+  # Default is a special value, and will be used if no room is specified
+  # e.g. `pokem The backup failed!` will send to the default room
+  default: "!RoomID:jackson.dev"
+  error: "!ErrorRoom:jackson.dev"
+  fullteam: "!RoomWithFullTeam:jackson.dev"
+  discord: "!RoomBridgedToDiscord:jackson.dev"
 
 # Optional, will use pokem.jackson.dev by default
 server:
