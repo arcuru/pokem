@@ -37,15 +37,29 @@ If you use the `pokem` CLI, you can set a `default_room` in the config file, and
 2. You should not rely on it to have more than 1 9 of reliability.
 3. There may be usage limits in the future.
 
+## Running A Private Bot Account
+
+If you don't want to use [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev), there are 2 ways to still use Pok'em.
+
+You can either:
+
+1. Host your own bot using `pokem --daemon`, and access just as described above.
+2. Use the Pok'em CLI with the Bot login configured. The app will login to the Matrix bot account and send the ping locally.
+
+Running Pok'em as a daemon has several advantages, but it is perfectly usable to just not bother.
+
+1. The daemon will be much more responsive, since it takes a while to login and sync up on Matrix.
+2. It will also be continuously available to respond to Room Invites and help request messages.
+
 ## Install
 
 `pokem` is only packaged on crates.io, but it's recommended that you run from git HEAD for now.
 
 For [Nix](https://nixos.org/) users, this repo contains a Nix flake. See the [setup section](#nix) for details on configuring.
 
-## Examples
+## Alternative Ideas
 
-Here are some things you could do with this:
+Here are some non-standard things you could do with this:
 
 ### Alert Everywhere
 
