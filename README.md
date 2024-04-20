@@ -35,6 +35,11 @@ If you'd like more examples, just look at the [ntfy docs](https://docs.ntfy.sh/#
 If you use the `pokem` CLI, you can set a `default_room` in the config file, and then you don't need to specify it in commands.
 `pokem Backup Successful 😀` will be all you need.
 
+The daemon also provides a webpage that will send messages for you, e.g. https://pokem.jackson.dev.
+For ease of use, you can use URLs with the Room ID so that you can generate easy links.
+
+Try it out! Send a message to https://pokem.jackson.dev/!bEufFIuqgBxeoMahSE:jackson.dev and I will see it.
+
 #### Limitations
 
 1. The pokem.jackson.dev instance is configured to never send messages to rooms larger than 5 people to avoid spam.

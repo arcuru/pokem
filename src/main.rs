@@ -373,6 +373,102 @@ async fn daemon_poke(
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // The uri without the leading / will be the room id
     let room_id = request.uri().path().trim_start_matches('/').to_string();
+    // The room_id may be URI encoded
+    let room_id = match urlencoding::decode(&room_id) {
+        Ok(room) => room.to_string(),
+        Err(_) => room_id,
+    };
+
+    // If it's a GET request, we'll serve a WebUI
+    if request.method() == hyper::Method::GET {
+        // Create the webpage with the room id filled in
+        let page = format!(
+            r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pok'em</title>
+<script>
+  async function submitForm(event) {{
+    // Prevent the default form submission
+    event.preventDefault();
+
+    // Reference to feedback display elements
+    const successMessage = document.getElementById('success-message');
+    const errorMessage = document.getElementById('error-message');
+
+    // Initially hide both messages
+    successMessage.style.display = 'none';
+    errorMessage.style.display = 'none';
+
+    // Get the room name and message from the form inputs
+    var room = document.getElementById('room').value;
+    var message = document.getElementById('message').value;
+
+    // Check if room and message are provided
+    if (!room || !message) {{
+      errorMessage.innerHTML = 'Please fill in both fields.';
+      errorMessage.style.display = 'block';
+      return;
+    }}
+
+    var actionURL = '/' + encodeURIComponent(room);
+
+    try {{
+      const response = await fetch(actionURL, {{
+        method: 'POST',
+        headers: {{
+          'Content-Type': 'text/plain',
+        }},
+        body: message
+      }});
+
+      if(response.ok) {{ 
+        // On success, display the success message
+        successMessage.innerHTML = "Message sent successfully!";
+        successMessage.style.display = 'block';
+      }} else {{
+        // On failure (non-2xx status), display an error message
+        errorMessage.innerHTML = "Failed to send message. Status: " + response.status;
+        errorMessage.style.display = 'block';
+      }}
+    }} catch (error) {{
+      // On error (network issue, etc.), display an error message
+      errorMessage.innerHTML = "Error sending message: " + error.message;
+      errorMessage.style.display = 'block';
+    }}
+  }}
+</script>
+</head>
+<body>
+
+<h2>Pok'em!</h2>
+<h3>Provide the Room and Message and we'll Poke Them for you.</h3>
+
+<form onsubmit="submitForm(event);">
+  <label for="room">Room:</label><br>
+  <input type="text" id="room" size="30" maxlength="40" value="{}"><br>
+  <label for="message">Message:</label><br>
+  <textarea id="message" rows="4" cols="50" maxlength="500"></textarea><br><br>
+  <input type="submit" value="Submit">
+</form>
+
+<!-- Feedback messages -->
+<div id="success-message" style="color: green; display: none;"></div>
+<div id="error-message" style="color: red; display: none;"></div>
+
+</body>
+</html>
+            "#,
+            room_id
+        );
+        return Ok(Response::builder()
+            .status(StatusCode::OK)
+            .body(Full::new(Bytes::from(page)))
+            .unwrap());
+    }
     // The request body will be the message
     // Tranform the body into a string
     let body_bytes = request.collect().await?.to_bytes();
