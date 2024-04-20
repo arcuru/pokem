@@ -1,6 +1,7 @@
 # Pok'em
 
-This is a (partial) [ntfy.sh](https://ntfy.sh) clone using Matrix.
+Send a Matrix message using the CLI or an HTTP PUT/POST request.
+It's intended to support easy scripting to send yourself or a team notifications over Matrix.
 
 This runs a Matrix bot account that pings you on Matrix when it's called.
 It can be run standalone, or it can run as a daemon and listen for HTTP requests.
@@ -9,11 +10,14 @@ That's it.
 
 If you want to use my default instance at https://pokem.jackson.dev, you don't need to install anything.
 
-Status: Alpha
-
 It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot framework in Rust.
 
+If it seems familiar, that's because it's a clone of the core feature of [ntfy.sh](https://ntfy.sh), but only using Matrix.
+I'd encourage you to check out that project to see if it better suits your needs.
+
 ## Usage
+
+### Using the public server
 
 I run an endpoint and associated bot account at https://pokem.jackson.dev.
 `pokem` will default to that instance if you have not configured the server settings.
@@ -31,13 +35,34 @@ If you'd like more examples, just look at the [ntfy docs](https://docs.ntfy.sh/#
 If you use the `pokem` CLI, you can set a `default_room` in the config file, and then you don't need to specify it in commands.
 `pokem Backup Successful 😀` will be all you need.
 
-### Limitations
+#### Limitations
 
 1. The pokem.jackson.dev instance is configured to never send messages to rooms larger than 5 people to avoid spam.
 2. You should not rely on it to have more than 1 9 of reliability.
 3. There may be usage limits in the future.
 
-## Running A Private Bot Account
+### CLI Usage
+
+The `pokem` tool comes with several convenience features to help with sending messages.
+
+You can configure a default room, and setup shorthand room names, to make things easier to use.
+
+Here are some example calls:
+
+```bash
+# These three commands are all equivalent
+pokem !RoomID:jackson.dev Backup failed!
+pokem --room !RoomID:jackson.dev Backup failed!
+curl --fail -d "Backup failed!" pokem.jackson.dev/!RoomID:jackson.dev
+
+pokem Backup failed! # Will send to your configured default room
+pokem error Backup failed! # Will send to your configured room named "error"
+pokem --room error Backup failed! # Same as above
+```
+
+See the [Setup](#setup) section for config options.
+
+### Running A Private Bot Account
 
 If you don't want to use [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev), there are 2 ways to still use Pok'em.
 
@@ -56,33 +81,6 @@ Running Pok'em as a daemon has several advantages, but it is perfectly usable to
 `pokem` is only packaged on crates.io, but it's recommended that you run from git HEAD for now.
 
 For [Nix](https://nixos.org/) users, this repo contains a Nix flake. See the [setup section](#nix) for details on configuring.
-
-## Alternative Ideas
-
-Here are some non-standard things you could do with this:
-
-### Alert Everywhere
-
-1. Run the bot account on a homeserver with bridges configured.
-2. Have the bot account login to anywhere else with a bridge (Discord, Slack, IRC, iMessage, etc).
-3. Use this to ping the Discord/Slack/IRC room using the bridge.
-
-### Script Your Own Messages
-
-1. Give `pokem` _your_ login info.
-2. Send any message to a room of your choice as yourself. e.g. `pokem <room> I'm running late`
-
-## Comparison with ntfy.sh
-
-### Cons
-
-1. Way fewer features. `pokem` only does text pings on Matrix.
-2. Fewer integrations. `pokem` is limited to only Matrix and things bridged to Matrix.
-
-### Pros
-
-1. Secure room topics by default. Nobody else can subscribe to the messages even with the key (although they could _send_ them).
-2. You don't need a separate app, just use your existing Matrix client.
 
 ## Setup
 
@@ -137,7 +135,34 @@ daemon:
   port: 80
 ```
 
-### Nix
+## Alternative Ideas
+
+Here are some non-standard things you could do with this:
+
+### Alert Everywhere
+
+1. Run the bot account on a homeserver with bridges configured.
+2. Have the bot account login to anywhere else with a bridge (Discord, Slack, IRC, iMessage, etc).
+3. Use this to ping the Discord/Slack/IRC room using the bridge.
+
+### Script Your Own Messages
+
+1. Give `pokem` _your_ login info.
+2. Send any message to a room of your choice as yourself. e.g. `pokem <room> I'm running late`
+
+## Comparison with ntfy.sh
+
+### Cons
+
+1. Way fewer features. `pokem` only does text pings on Matrix.
+2. Fewer integrations. `pokem` is limited to only Matrix and things bridged to Matrix.
+
+### Pros
+
+1. Secure room topics by default. Nobody else can subscribe to the messages even with the key (although they could _send_ them).
+2. You don't need a separate app, just use your existing Matrix client.
+
+## Nix
 
 Development is being done using a [Nix flake](https://nixos.wiki/wiki/Flakes).
 The easiest way to install pokem is to use nix flakes.

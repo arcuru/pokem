@@ -28,21 +28,18 @@ use tokio::net::TcpListener;
 #[command(author, version, about, long_about = None)]
 struct PokemArgs {
     /// Path to config file
-    /// If not given we'll look in $XDG_CONFIG_HOME/pokem/config.yaml
     #[arg(short, long)]
     config: Option<PathBuf>,
 
-    /// Room info
+    /// Room ID to send the message to
     #[arg(short, long)]
     room: Option<String>,
 
     /// Run in daemon mode
-    /// This will run the bot in daemon mode, listening on a port for commands
     #[arg(short, long)]
     daemon: bool,
 
     /// Message to send
-    /// The rest of the arguments
     #[arg()]
     message: Option<Vec<String>>,
 }
@@ -57,10 +54,10 @@ struct ServerConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 struct DaemonConfig {
-    /// IP to bind on
+    /// IP to bind on.
     /// Defaults to 0.0.0.0
     addr: Option<String>,
-    /// Port to bind on
+    /// Port to bind on.
     /// Will default to 80
     port: Option<u16>,
 }
