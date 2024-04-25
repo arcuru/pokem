@@ -32,7 +32,7 @@ You can run your own instance (using `pokem --daemon`), but here I'll describe u
 `pokem`, like `ntfy`, listens to HTTP PUT/POST requests, so it's easy to send a message.
 If you'd like more examples, just look at the [ntfy docs](https://docs.ntfy.sh/#step-2-send-a-message) and use the Matrix Room ID instead of the ntfy "topic".
 
-If you use the `pokem` CLI, you can set a `default_room` in the config file, and then you don't need to specify it in commands.
+If you use the `pokem` CLI, you can set a default room in the config file, and then you don't need to specify it in commands.
 `pokem Backup Successful 😀` will be all you need.
 
 The daemon also provides a webpage that will send messages for you, e.g. https://pokem.jackson.dev.
@@ -113,7 +113,9 @@ rooms:
   fullteam: "!RoomWithFullTeam:jackson.dev"
   discord: "!RoomBridgedToDiscord:jackson.dev"
 
-# Optional, will use pokem.jackson.dev by default
+# Optional, define the server to send messages to
+# If configured, `pokem` will first try to query this server to send the message
+# Will use pokem.jackson.dev by default
 server:
   url: https://pokem.jackson.dev
   # Optional, customize the port if necessary
