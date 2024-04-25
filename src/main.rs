@@ -252,7 +252,14 @@ async fn connect(config: MatrixConfig) -> anyhow::Result<Bot> {
 
     // React to invites.
     bot.join_rooms_callback(Some(|room: matrix_sdk::Room| async move {
-        error!("Joined room");
+        error!("Joined room: {}", room.room_id().as_str());
+        if can_message_room(&room).await {
+            room.send(RoomMessageEventContent::text_plain(
+                "Welcome to Pok'em!\n\nSend \".help\" to see available commands.",
+            ))
+            .await
+            .expect("Failed to send message");
+        }
         send_help(&room).await;
         Ok(())
     }));
@@ -359,7 +366,7 @@ async fn can_message_room(room: &Room) -> bool {
 async fn send_help(room: &Room) {
     if can_message_room(room).await {
         room.send(RoomMessageEventContent::text_plain(format!(
-            "Welcome to pokem!\n\nThis room's name is: {}",
+            "This room's name is: {}",
             room.room_id().as_str()
         )))
         .await
