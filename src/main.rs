@@ -189,6 +189,13 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    // Append any stdin content to the message
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).unwrap();
+    if !input.is_empty() {
+        messages.push(input.trim().to_string());
+    }
+
     if config.server.is_none() && config.matrix.is_none() {
         // The user has set neither server nor matrix config
         // Assume they want to use the public instance

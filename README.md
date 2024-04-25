@@ -63,6 +63,10 @@ curl --fail -d "Backup failed!" pokem.jackson.dev/!RoomID:jackson.dev
 pokem Backup failed! # Will send to your configured default room
 pokem error Backup failed! # Will send to your configured room named "error"
 pokem --room error Backup failed! # Same as above
+
+# It also accepts stdin as the room message
+echo "Backup failed!" | pokem error # Sends to the room named "error"
+cat README.md | pokem # Send the contents of a file to the default room
 ```
 
 See the [Setup](#setup) section for config options.
