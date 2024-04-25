@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2024-04-25
+
+### Documentation
+
+- Adding notes on running it privately
+- Fix formatting of the settings
+- Update README
+- Clarify the default room setup
+
+### Features
+
+- Allow multiple room configs
+- Add a WebUI
+- Add a poke command to the daemon
+- Improve the welcome message
+- Accept stdin for the message
+
+### Miscellaneous Tasks
+
+- Release v0.2.0
+
+### Styling
+
+- Spellchecking
+
 ## [0.1.1] - 2024-04-19
 
 ### Bug Fixes
