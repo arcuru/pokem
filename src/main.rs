@@ -477,7 +477,7 @@ async fn daemon_poke(
             .unwrap());
     }
     // The request body will be the message
-    // Tranform the body into a string
+    // Transform the body into a string
     let body_bytes = request.collect().await?.to_bytes();
     let message = String::from_utf8(body_bytes.to_vec()).unwrap();
     error!("Room: {:?}, Message: {:?}", room_id, message);
@@ -584,7 +584,7 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
                 Ok(result) => result,
                 Err(err) => {
                     error!("Error accepting connection: {:?}", err);
-                    error!("Exitind daemon");
+                    error!("Exiting daemon");
                     return;
                 }
             };
