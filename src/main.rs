@@ -8,6 +8,7 @@ use serde::Deserialize;
 
 use std::collections::HashMap;
 
+use is_terminal::IsTerminal;
 use std::{fs::File, io::Read, path::PathBuf, sync::Mutex};
 use tracing::{error, info};
 
@@ -191,9 +192,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Append any stdin content to the message
     let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input).unwrap();
-    if !input.is_empty() {
-        messages.push(input.trim().to_string());
+    if !std::io::stdin().is_terminal() {
+        std::io::stdin().read_to_string(&mut input).unwrap();
+        if !input.is_empty() {
+            messages.push(input.trim().to_string());
+        }
     }
 
     if config.server.is_none() && config.matrix.is_none() {
