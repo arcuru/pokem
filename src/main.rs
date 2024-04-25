@@ -537,6 +537,38 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     )
     .await;
 
+    // Register a poke command that will send a poke
+    bot.register_text_command(
+        "poke",
+        "<room> <message> - Poke the room".to_string(),
+        |_, msg, room| async move {
+            // Get the room and message
+            let mut args = msg.split_whitespace();
+            let _ = args.next(); // Ignore the command
+            let room_id = args.next().unwrap_or_default();
+            let message = args.collect::<Vec<&str>>().join(" ");
+            error!("Room: {:?}, Message: {:?}", room_id, message);
+
+            // Get a copy of the bot
+            let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
+
+            if let Err(e) = ping_room(&bot, room_id, &message).await {
+                error!("Failed to send message: {:?}", e);
+                if can_message_room(&room).await {
+                    room.send(RoomMessageEventContent::text_plain(&format!(
+                        "Failed to send message: {:?}",
+                        e
+                    )))
+                    .await
+                    .expect("Failed to send message");
+                }
+                return Err(());
+            }
+            Ok(())
+        },
+    )
+    .await;
+
     // Spawn a tokio task to continuously accept incoming connections
     tokio::task::spawn(async move {
         // We start a loop to continuously accept incoming connections
