@@ -350,6 +350,12 @@ async fn ping_room(bot: &Bot, room_id: &str, message: &str) -> anyhow::Result<()
 
 /// Check if we can message the room
 async fn can_message_room(room: &Room) -> bool {
+    // Always send to the example room
+    if room.room_id().as_str() == "!JYrjsPjErpFSDdpwpI:jackson.dev" {
+        error!("Sending to example room");
+        return true;
+    }
+
     // Check the room size
     let room_size = room
         .members(RoomMemberships::ACTIVE)
