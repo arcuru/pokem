@@ -42,7 +42,7 @@ If you use the `pokem` CLI, you can set a default room in the config file, and t
 The daemon also provides a webpage that will send messages for you, e.g. https://pokem.jackson.dev.
 For ease of use, you can use URLs with the Room ID so that you can generate easy links.
 
-Try it out! Send a message to https://pokem.jackson.dev/!bEufFIuqgBxeoMahSE:jackson.dev and I will see it.
+Try it out! Send a message to https://pokem.jackson.dev/!JYrjsPjErpFSDdpwpI:jackson.dev and you can see it in [@pokem-example:jackson.dev](https://matrix.to/#/@pokem-example:jackson.dev).
 
 #### Limitations
 
