@@ -1,6 +1,7 @@
 use clap::Parser;
 use headjack::*;
 use lazy_static::lazy_static;
+
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::{Room, RoomMemberships, RoomState};
@@ -164,7 +165,7 @@ async fn main() -> anyhow::Result<()> {
             }
             None => {
                 // Create a regex to see if the first argument looks like a room name
-                let re = regex::Regex::new(r"!.*:.*").unwrap();
+                let re = regex::Regex::new(r"^.*:.*\..*").unwrap();
                 if messages.is_empty() {
                     // Check if there is a default room configured
                     // That room will be pinged with no message
@@ -175,6 +176,8 @@ async fn main() -> anyhow::Result<()> {
                     }
                 } else if re.is_match(&messages[0]) {
                     // Use the first arg if it's a raw room id
+                    // TODO: This has surprising behavior if this isn't an intended room, we'd want to fall back to the configured default room
+                    // I suppose we could fallback in this CLI? e.g. if the command fails to identify a room, then try the default room
                     messages.remove(0)
                 } else if let Some(room_id) = rooms.get(&messages[0]) {
                     // Check for a room name in the config
@@ -312,40 +315,113 @@ async fn poke_server(server: &ServerConfig, room: &str, message: &str) -> anyhow
     }
 }
 
-/// Send a message to a room
-async fn ping_room(bot: &Bot, room_id: &str, message: &str) -> anyhow::Result<()> {
-    let room_id = match matrix_sdk::ruma::RoomId::parse(room_id) {
-        Ok(id) => id,
-        Err(e) => {
-            return Err(anyhow::anyhow!("Failed to parse room id: {}", e));
-        }
-    };
-    let r = match bot.client().get_room(&room_id) {
-        Some(room) => room,
-        None => {
-            return Err(anyhow::anyhow!("Failed to find the room"));
-        }
-    };
-
-    // If we're in an invited state, we need to wait for the invite to be accepted
-    let mut delay = 2;
-    while r.state() == RoomState::Invited {
-        if delay > 60 {
-            return Err(anyhow::anyhow!("Failed to join room"));
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-        delay *= 2;
-    }
-
-    if can_message_room(&r).await {
-        if let Err(e) = r.send(RoomMessageEventContent::text_plain(message)).await {
-            return Err(anyhow::anyhow!("Failed to send message: {}", e));
+/// Check a room to see if we should leave it.
+/// It applies if we're the only ones left in the room.
+#[allow(dead_code)]
+async fn should_leave_room(room: &Room) -> bool {
+    // Check if we are joined to the room, and there is only 1 member
+    // This means we are the only member
+    if let Ok(members) = room.members(RoomMemberships::ACTIVE).await {
+        // We'd be the only member
+        if members.len() == 1 {
+            error!("Found empty room");
+            true
+        } else {
+            false
         }
     } else {
-        error!("Failed to send message");
+        false
+    }
+}
+
+/// Translate a provided room name into an actual Room struct.
+/// This looks up by either the Room Internal ID or the Room Alias.
+/// Any alias, main or alt, will be checked.
+async fn get_room_from_name(bot: &Bot, name: &str) -> Option<Room> {
+    if name.is_empty() {
+        return None;
     }
 
-    Ok(())
+    // Is this a room internal id?
+    if let Ok(id) = matrix_sdk::ruma::RoomId::parse(name) {
+        return bot.client().get_room(&id);
+    }
+
+    // Is this a user address?
+    let re = regex::Regex::new(r"^@.*:.*\..*").unwrap();
+    if re.is_match(name) {
+        // This looks like a user name
+        // unsupported at this time
+        return None;
+    }
+
+    // #@patrick:jackson.dev is a valid _room_ name
+    // We will be careful to not allow that, and ignore all room names that look like user names
+
+    // If name does not start with a '#', add it
+    // This is to get around oddities with specifying the '#' in the URL
+    // It's annoying to reference it, so we support the room name without the '#'
+    let name = if name.starts_with('#') {
+        name.to_string()
+    } else {
+        format!("#{}", name)
+    };
+
+    // Is this a room address?
+    let re = regex::Regex::new(r"^#.*:.*\..*").unwrap();
+    if re.is_match(&name) {
+        // We're just going to scan every room we're in to look for this room name
+        // Effective? Sure.
+        // Efficient? Absolutely not.
+        let rooms = bot.client().joined_rooms();
+        for r in &rooms {
+            let room_alias = r.canonical_alias();
+            if let Some(alias) = room_alias {
+                if alias.as_str() == name {
+                    return Some(r.clone());
+                }
+            }
+            // Check the alt aliases
+            for alias in r.alt_aliases() {
+                if alias.as_str() == name {
+                    return Some(r.clone());
+                }
+            }
+        }
+        return None;
+    }
+    error!("Failed to find room: {}", name);
+    None
+}
+
+/// Send a message to a room.
+async fn ping_room(bot: &Bot, room_id: &str, message: &str) -> anyhow::Result<()> {
+    if let Some(r) = get_room_from_name(bot, room_id).await {
+        // If we're in an invited state, we need to wait for the invite to be accepted
+        let mut delay = 2;
+        while r.state() == RoomState::Invited {
+            if delay > 60 {
+                return Err(anyhow::anyhow!("Failed to join room"));
+            }
+            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+            delay *= 2;
+        }
+
+        if can_message_room(&r).await {
+            if let Err(e) = r.send(RoomMessageEventContent::text_plain(message)).await {
+                return Err(anyhow::anyhow!("Failed to send message: {}", e));
+            }
+        } else {
+            error!("Failed to send message");
+        }
+
+        return Ok(());
+    }
+    error!("Failed to find room with name: {}", room_id);
+    Err(anyhow::anyhow!(
+        "Failed to find room with name: {}",
+        room_id
+    ))
 }
 
 /// Check if we can message the room
@@ -381,8 +457,16 @@ async fn can_message_room(room: &Room) -> bool {
 /// Send the help message with the room id
 async fn send_help(room: &Room) {
     if can_message_room(room).await {
+        if let Some(alias) = room.canonical_alias() {
+            room.send(RoomMessageEventContent::text_plain(format!(
+                "This Room's Alias is: {}",
+                alias.as_str()
+            )))
+            .await
+            .expect("Failed to send message");
+        }
         room.send(RoomMessageEventContent::text_plain(format!(
-            "This room's name is: {}",
+            "This Room's ID is: {}",
             room.room_id().as_str()
         )))
         .await
@@ -405,8 +489,7 @@ async fn daemon_poke(
     // If it's a GET request, we'll serve a WebUI
     if request.method() == hyper::Method::GET {
         // Create the webpage with the room id filled in
-        let page = format!(
-            r#"
+        let page = r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -414,7 +497,7 @@ async fn daemon_poke(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pok'em</title>
 <script>
-  async function submitForm(event) {{
+  async function submitForm(event) {
     // Prevent the default form submission
     event.preventDefault();
 
@@ -431,38 +514,52 @@ async fn daemon_poke(
     var message = document.getElementById('message').value;
 
     // Check if room and message are provided
-    if (!room || !message) {{
+    if (!room || !message) {
       errorMessage.innerHTML = 'Please fill in both fields.';
       errorMessage.style.display = 'block';
       return;
-    }}
+    }
 
     var actionURL = '/' + encodeURIComponent(room);
 
-    try {{
-      const response = await fetch(actionURL, {{
+    try {
+      const response = await fetch(actionURL, {
         method: 'POST',
-        headers: {{
+        headers: {
           'Content-Type': 'text/plain',
-        }},
+        },
         body: message
-      }});
+      });
 
-      if(response.ok) {{ 
+      if(response.ok) { 
         // On success, display the success message
         successMessage.innerHTML = "Message sent successfully!";
         successMessage.style.display = 'block';
-      }} else {{
+      } else {
         // On failure (non-2xx status), display an error message
         errorMessage.innerHTML = "Failed to send message. Status: " + response.status;
         errorMessage.style.display = 'block';
-      }}
-    }} catch (error) {{
+      }
+    } catch (error) {
       // On error (network issue, etc.), display an error message
       errorMessage.innerHTML = "Error sending message: " + error.message;
       errorMessage.style.display = 'block';
-    }}
-  }}
+    }
+  }
+
+  // Decode the URL nad use that to set the Room Name
+  function setInitialRoomValue() {
+    const url = window.location.href;
+    console.log(url);
+    const roomField = document.getElementById('room');
+    const roomValue = url.substring(url.lastIndexOf('/') + 1);
+    console.log(roomValue);
+
+    roomField.value = decodeURIComponent(roomValue);
+  }
+
+  // Call the function to set the initial room value when the page loads
+  window.onload = setInitialRoomValue;
 </script>
 </head>
 <body>
@@ -472,9 +569,9 @@ async fn daemon_poke(
 
 <form onsubmit="submitForm(event);">
   <label for="room">Room:</label><br>
-  <input type="text" id="room" size="30" maxlength="40" value="{}"><br>
+  <input type="text" id="room" size="30" maxlength="256"><br>
   <label for="message">Message:</label><br>
-  <textarea id="message" rows="4" cols="50" maxlength="500"></textarea><br><br>
+  <textarea id="message" rows="4" cols="50" maxlength="1024"></textarea><br><br>
   <input type="submit" value="Submit">
 </form>
 
@@ -484,9 +581,8 @@ async fn daemon_poke(
 
 </body>
 </html>
-            "#,
-            room_id
-        );
+            "#
+        .to_string();
         return Ok(Response::builder()
             .status(StatusCode::OK)
             .body(Full::new(Bytes::from(page)))
