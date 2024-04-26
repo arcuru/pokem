@@ -2,7 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.2.0] - 2024-04-25
+## [0.2.1] - 2024-04-26
+
+### Bug Fixes
+
+- Fix broken stdin handling
 
 ### Documentation
 
@@ -22,6 +26,7 @@ All notable changes to this project will be documented in this file.
 ### Miscellaneous Tasks
 
 - Release v0.2.0
+- Release v0.2.1
 
 ### Styling
 
