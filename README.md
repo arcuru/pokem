@@ -15,6 +15,10 @@ It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot f
 If it seems familiar, that's because it's a clone of the core feature of [ntfy.sh](https://ntfy.sh), but only using Matrix.
 I'd encourage you to check out that project to see if it better suits your needs.
 
+## Getting Help
+
+There is a public Matrix room available at [#pokem:jackson.dev](https://matrix.to/#/#pokem:jackson.dev)
+
 ## Usage
 
 ### Using the public server
