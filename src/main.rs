@@ -81,6 +81,9 @@ struct MatrixConfig {
     /// Set the state directory for pokem
     /// Defaults to $XDG_STATE_HOME/pokem
     state_dir: Option<String>,
+    /// Set the command prefix.
+    /// Defaults to "!pokem".
+    command_prefix: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
@@ -194,6 +197,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
+    error!("Room: {:?}, Message: {:?}", room, messages);
 
     // Append any stdin content to the message
     let mut input = String::new();
@@ -240,6 +244,7 @@ async fn main() -> anyhow::Result<()> {
         info!("Running as a Matrix client");
         // Login to matrix
         let bot = connect(matrix).await?;
+        GLOBAL_BOT.lock().unwrap().replace(bot.clone());
         // Ping the room
         return ping_room(&bot, &room, &messages.join(" ")).await;
     }
@@ -258,6 +263,11 @@ async fn connect(config: MatrixConfig) -> anyhow::Result<Bot> {
         name: Some(config.username.clone()),
         allow_list: config.allow_list,
         state_dir: config.state_dir,
+        command_prefix: if config.command_prefix.is_none() {
+            Some("!pokem".to_string())
+        } else {
+            config.command_prefix
+        },
     })
     .await;
 
@@ -289,7 +299,11 @@ async fn connect(config: MatrixConfig) -> anyhow::Result<Bot> {
     Ok(bot)
 }
 
+/// Send a message to the server.
 async fn poke_server(server: &ServerConfig, room: &str, message: &str) -> anyhow::Result<()> {
+    // URI encode the room
+    let room = urlencoding::encode(room).to_string();
+
     let url = {
         if server.port.is_none() {
             format!("{}/{}", server.url, room)
@@ -677,7 +691,8 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Register an info command to echo the room info
     bot.register_text_command(
         "info",
-        "Print room info".to_string(),
+        None,
+        Some("Print room info".to_string()),
         |_, _, room| async move {
             if can_message_room(&room).await {
                 send_help(&room).await;
@@ -690,7 +705,8 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Register a poke command that will send a poke
     bot.register_text_command(
         "poke",
-        "<room> <message> - Poke the room".to_string(),
+        Some("<room> <message>".to_string()),
+        Some("Poke the room".to_string()),
         |_, msg, room| async move {
             // Get the room and message
             let mut args = msg.split_whitespace();
@@ -722,7 +738,8 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Block Pok'em from sending messages to this room
     bot.register_text_command(
         "block",
-        "Block Pok'em from sending messages to this room.".to_string(),
+        None,
+        Some("Block Pok'em from sending messages to this room".to_string()),
         |_, _, room| async move {
             if can_message_room(&room).await {
                 // If we can't message the room we won't make any changes here
@@ -744,7 +761,8 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Unblock Pok'em from sending messages to this room
     bot.register_text_command(
         "unblock",
-        "Unblock Pok'em to allow notifications to this room.".to_string(),
+        None,
+        Some("Unblock Pok'em to allow notifications to this room".to_string()),
         |_, _, room| async move {
             if room.remove_tag("dev.pokem.block".into()).await.is_ok() {
                 room.send(RoomMessageEventContent::text_plain(
@@ -767,7 +785,8 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Register command to set variables
     bot.register_text_command(
         "set",
-        "Configure settings for Pok'em in this room".to_string(),
+        Some("<block|password> <on|off|password>".to_string()),
+        Some("Configure settings for Pok'em in this room".to_string()),
         set_command,
     )
     .await;
@@ -806,16 +825,31 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     bot.run().await
 }
 
+/// Get command prefix
+fn get_command_prefix() -> String {
+    GLOBAL_BOT
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .command_prefix()
+}
+
 /// Sets config options for the room
 async fn set_command(_: matrix_sdk::ruma::OwnedUserId, msg: String, room: Room) -> Result<(), ()> {
     let mut room_config = get_room_config(&room).await;
-    let key = msg.split_whitespace().nth(1).unwrap_or_default();
-    let value = msg.split_whitespace().nth(2).unwrap_or_default();
+    let command = msg.trim_start_matches(&get_command_prefix());
+    let key = command.split_whitespace().nth(1).unwrap_or_default();
+    let value = command.split_whitespace().nth(2).unwrap_or_default();
+    error!("Setting room config: {} {}", key, value);
 
     let response = match key {
         "block" => {
             if value.is_empty() {
-                "Block cannot be empty\n.set block [on|off]".to_string()
+                format!(
+                    "Block cannot be empty\n`{}set block [on|off]`",
+                    get_command_prefix()
+                )
             } else if value.to_lowercase() == "on" {
                 room_config.block = true;
                 "Blocking messages".to_string()
@@ -830,7 +864,10 @@ async fn set_command(_: matrix_sdk::ruma::OwnedUserId, msg: String, room: Room) 
             // Set a password necessary to send a message.
             // A password needs to be at the start of the text message
             if value.is_empty() {
-                "Password cannot be empty\n.set password [off|password]".to_string()
+                format!(
+                    "Password cannot be empty\n`{}set password [off|password]`",
+                    get_command_prefix()
+                )
             } else if value.to_lowercase() == "on" {
                 "Tried setting the password to 'on', that was probably an accident".to_string()
             } else if value.to_lowercase() == "off" {
@@ -845,19 +882,20 @@ async fn set_command(_: matrix_sdk::ruma::OwnedUserId, msg: String, room: Room) 
             let block_status = if room_config.block { "on" } else { "off" };
             format!(
                 "Usage:
-.set [block|pass] <on|off|password>
-Current values are block {}, and {}",
+`{}set [block|pass] <on|off|password>`
+Current values:\n- block: {}{}",
+                get_command_prefix(),
                 block_status,
                 if let Some(password) = room_config.password.clone() {
-                    format!("password {}", password)
+                    format!("\n- password: {}", password)
                 } else {
-                    "no password".to_string()
+                    "".to_string()
                 }
             )
         }
     };
     set_room_config(&room, room_config).await;
-    room.send(RoomMessageEventContent::text_plain(&response))
+    room.send(RoomMessageEventContent::text_markdown(&response))
         .await
         .expect("Failed to send message");
     Ok(())
@@ -878,29 +916,31 @@ async fn set_room_config(room: &Room, config: RoomConfig) {
     } else {
         room.remove_tag("dev.pokem.block".into()).await.unwrap();
     }
-    if let Some(password) = config.password {
-        // Remove any existing password
-        let mut placed = false;
-        let tags = room.tags().await.unwrap_or_default();
-        for (tag, _) in tags.unwrap_or_default() {
-            if tag.to_string().starts_with("dev.pokem.pass.") {
-                if tag.to_string().trim_start_matches("dev.pokem.pass.") == password {
-                    // Already in place
-                    placed = true;
-                } else {
-                    // If this tag doesn't match the new one, remove it
-                    room.remove_tag(tag).await.unwrap();
-                }
-            };
-        }
-        if !placed {
-            room.set_tag(
-                format!("dev.pokem.pass.{}", password).into(),
-                TagInfo::default(),
-            )
-            .await
-            .unwrap();
-        }
+    // Grab the password from the option for ergonomics
+    let password = config.password.clone().unwrap_or("".to_string());
+    // Remove any existing password
+    let mut placed = false;
+    let tags = room.tags().await.unwrap_or_default();
+    for (tag, _) in tags.unwrap_or_default() {
+        if tag.to_string().starts_with("dev.pokem.pass.") {
+            if config.password.is_some()
+                && tag.to_string().trim_start_matches("dev.pokem.pass.") == password
+            {
+                // Already in place
+                placed = true;
+            } else {
+                // If this tag doesn't match the new one, remove it
+                room.remove_tag(tag).await.unwrap();
+            }
+        };
+    }
+    if config.password.is_some() && !placed {
+        room.set_tag(
+            format!("dev.pokem.pass.{}", password).into(),
+            TagInfo::default(),
+        )
+        .await
+        .unwrap();
     }
 }
 
