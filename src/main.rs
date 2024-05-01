@@ -6,6 +6,7 @@ use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::{Room, RoomMemberships, RoomState};
+
 use serde::Deserialize;
 
 use std::collections::HashMap;
@@ -408,8 +409,23 @@ async fn ping_room(bot: &Bot, room_id: &str, message: &str) -> anyhow::Result<()
             delay *= 2;
         }
 
+        let mut msg = message;
+
+        // Check for a password
+        let room_config = get_room_config(&r).await;
+        if room_config.password.is_some() {
+            // Check if the message starts with the password
+            if !msg.starts_with(&room_config.password.clone().unwrap()) {
+                return Err(anyhow::anyhow!("Password required"));
+            }
+            // Remove the password and any leading whitespace
+            msg = msg
+                .trim_start_matches(&room_config.password.unwrap())
+                .trim_start();
+        }
+
         if can_message_room(&r).await {
-            if let Err(e) = r.send(RoomMessageEventContent::text_plain(message)).await {
+            if let Err(e) = r.send(RoomMessageEventContent::text_plain(msg)).await {
                 return Err(anyhow::anyhow!("Failed to send message: {}", e));
             }
         } else {
@@ -748,6 +764,14 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     )
     .await;
 
+    // Register command to set variables
+    bot.register_text_command(
+        "set",
+        "Configure settings for Pok'em in this room".to_string(),
+        set_command,
+    )
+    .await;
+
     // Spawn a tokio task to continuously accept incoming connections
     tokio::task::spawn(async move {
         // We start a loop to continuously accept incoming connections
@@ -780,4 +804,131 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Run the bot and block
     // It never exits
     bot.run().await
+}
+
+/// Sets config options for the room
+async fn set_command(_: matrix_sdk::ruma::OwnedUserId, msg: String, room: Room) -> Result<(), ()> {
+    let mut room_config = get_room_config(&room).await;
+    let key = msg.split_whitespace().nth(1).unwrap_or_default();
+    let value = msg.split_whitespace().nth(2).unwrap_or_default();
+
+    let response = match key {
+        "block" => {
+            if value.is_empty() {
+                "Block cannot be empty\n.set block [on|off]".to_string()
+            } else if value.to_lowercase() == "on" {
+                room_config.block = true;
+                "Blocking messages".to_string()
+            } else if value.to_lowercase() == "off" {
+                room_config.block = false;
+                "Unblocking messages".to_string()
+            } else {
+                "Invalid value, use 'on' or 'off'".to_string()
+            }
+        }
+        "password" | "pass" => {
+            // Set a password necessary to send a message.
+            // A password needs to be at the start of the text message
+            if value.is_empty() {
+                "Password cannot be empty\n.set password [off|password]".to_string()
+            } else if value.to_lowercase() == "on" {
+                "Tried setting the password to 'on', that was probably an accident".to_string()
+            } else if value.to_lowercase() == "off" {
+                room_config.password = None;
+                "Password removed".to_string()
+            } else {
+                room_config.password = Some(value.to_string());
+                format!("Password set to {}", value).to_string()
+            }
+        }
+        _ => {
+            let block_status = if room_config.block { "on" } else { "off" };
+            format!(
+                "Usage:
+.set [block|pass] <on|off|password>
+Current values are block {}, and {}",
+                block_status,
+                if let Some(password) = room_config.password.clone() {
+                    format!("password {}", password)
+                } else {
+                    "no password".to_string()
+                }
+            )
+        }
+    };
+    set_room_config(&room, room_config).await;
+    room.send(RoomMessageEventContent::text_plain(&response))
+        .await
+        .expect("Failed to send message");
+    Ok(())
+}
+
+#[derive(Debug, Default)]
+struct RoomConfig {
+    block: bool,
+    password: Option<String>,
+}
+
+/// Write the Room config into the tags
+async fn set_room_config(room: &Room, config: RoomConfig) {
+    if config.block {
+        room.set_tag("dev.pokem.block".into(), TagInfo::default())
+            .await
+            .unwrap();
+    } else {
+        room.remove_tag("dev.pokem.block".into()).await.unwrap();
+    }
+    if let Some(password) = config.password {
+        // Remove any existing password
+        let mut placed = false;
+        let tags = room.tags().await.unwrap_or_default();
+        for (tag, _) in tags.unwrap_or_default() {
+            if tag.to_string().starts_with("dev.pokem.pass.") {
+                if tag.to_string().trim_start_matches("dev.pokem.pass.") == password {
+                    // Already in place
+                    placed = true;
+                } else {
+                    // If this tag doesn't match the new one, remove it
+                    room.remove_tag(tag).await.unwrap();
+                }
+            };
+        }
+        if !placed {
+            room.set_tag(
+                format!("dev.pokem.pass.{}", password).into(),
+                TagInfo::default(),
+            )
+            .await
+            .unwrap();
+        }
+    }
+}
+
+// Get all the current set room configs from the tags.
+async fn get_room_config(room: &Room) -> RoomConfig {
+    let mut config = RoomConfig::default();
+    // the tags to only things that start with "dev.pokem."
+    let tags = room.tags().await.unwrap_or_default();
+    for (tag, _) in tags.unwrap_or_default() {
+        if tag.to_string() == "dev.pokem.block" {
+            config.block = true;
+        } else if tag.to_string().starts_with("dev.pokem.pass.") {
+            if config.password.is_some() {
+                // We only want one password, this is a warning
+                // It probably means we failed to remove a password on a password change
+                error!(
+                    "Multiple passwords set for room: {}",
+                    room.room_id().as_str()
+                );
+                continue;
+            }
+            // Get the password
+            config.password = Some(
+                tag.to_string()
+                    .trim_start_matches("dev.pokem.pass.")
+                    .to_string(),
+            );
+        }
+    }
+    config
 }
