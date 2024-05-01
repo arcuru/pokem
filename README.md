@@ -12,7 +12,7 @@ If you want to use my default instance at https://pokem.jackson.dev, you don't n
 
 It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot framework in Rust.
 
-If it seems familiar, that's because it's a clone of the core feature of [ntfy.sh](https://ntfy.sh), but only using Matrix.
+If this seems familiar, that's because it's a clone of the core feature of [ntfy.sh](https://ntfy.sh), but only using Matrix.
 I'd encourage you to check out that project to see if it better suits your needs.
 
 ## Getting Help
@@ -29,12 +29,12 @@ I run an endpoint and associated bot account at https://pokem.jackson.dev.
 You can run your own instance (using `pokem --daemon`), but here I'll describe using pokem.jackson.dev
 
 1. On Matrix, create a room and invite the bot account, [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev).
-2. Grab the Matrix Room ID from the welcome message or from your client.
+2. Grab the Matrix Room Alias or ID from the welcome message or from your client.
 3. Run `curl --fail -d "Backup successful 😀" pokem.jackson.dev/<room id>`. Or use `pokem <room id> <message>`.
 4. The `curl` or `pokem` commands will block until the message is sent, and will return an error if there is a problem.
 
 `pokem`, like `ntfy`, listens to HTTP PUT/POST requests, so it's easy to send a message.
-If you'd like more examples, just look at the [ntfy docs](https://docs.ntfy.sh/#step-2-send-a-message) and use the Matrix Room ID instead of the ntfy "topic".
+If you'd like more examples of how to send messages, just look at the [ntfy docs](https://docs.ntfy.sh/#step-2-send-a-message) and use the Matrix Room ID instead of the ntfy "topic".
 
 If you use the `pokem` CLI, you can set a default room in the config file, and then you don't need to specify it in commands.
 `pokem Backup Successful 😀` will be all you need.
@@ -42,13 +42,15 @@ If you use the `pokem` CLI, you can set a default room in the config file, and t
 The daemon also provides a webpage that will send messages for you, e.g. https://pokem.jackson.dev.
 For ease of use, you can use URLs with the Room ID so that you can generate easy links.
 
-Try it out! Send a message to https://pokem.jackson.dev/!JYrjsPjErpFSDdpwpI:jackson.dev and you can see it in [#pokem-example:jackson.dev](https://matrix.to/#/#pokem-example:jackson.dev).
+Try it out! Send a message to https://pokem.jackson.dev/pokem-example:jackson.dev and you can see it in [#pokem-example:jackson.dev](https://matrix.to/#/#pokem-example:jackson.dev).
 
-#### Limitations
+You can also use the unique room id: https://pokem.jackson.dev/!JYrjsPjErpFSDdpwpI:jackson.dev, or a URI-encoded room-alias (with the Matrix standard '#') https://pokem.jackson.dev/%23pokem-example:jackson.dev.
+'#' is a special URL character, you need to URI Encode it (as "%23") or just remove it from your request, as we will support "pokem-example:jackson.dev" as a room name.
 
-1. The pokem.jackson.dev instance is configured to never send messages to rooms larger than 5 people to avoid spam.
-2. You should not rely on it to have more than 1 9 of reliability.
-3. There may be usage limits in the future.
+#### Limitations of [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev)
+
+1. You should not rely on it to have more than 1 9 of reliability.
+2. There may be usage limits in the future.
 
 ### CLI Usage
 
@@ -84,14 +86,15 @@ You can either:
 1. Host your own bot using `pokem --daemon`, and access just as described above.
 2. Use the Pok'em CLI with the Bot login configured. The app will login to the Matrix bot account and send the ping locally.
 
-Running Pok'em as a daemon has several advantages, but it is perfectly usable to just not bother.
+Running Pok'em as a daemon has several advantages, but it is perfectly usable to just use local login.
 
 1. The daemon will be much more responsive, since it takes a while to login and sync up on Matrix.
 2. It will also be continuously available to respond to Room Invites and help request messages.
+3. You can skip installing `pokem` locally, which is especially useful to be pinged from a CI job.
 
 ## Install
 
-`pokem` is only packaged on crates.io, but it's recommended that you run from git HEAD for now.
+`pokem` is only packaged on crates.io, so installing it needs to be done via `cargo install pokem` or from git.
 
 For [Nix](https://nixos.org/) users, this repo contains a Nix flake. See the [setup section](#nix) for details on configuring.
 
@@ -103,7 +106,7 @@ Using your own bot account will require setup, otherwise there is no setup requi
 
 1. `pokem --daemon` runs it as a daemon, listening for HTTP messages.
 2. If there is no server or matrix login configured, it will send the request to the `pokem.jackson.dev` instance.
-3. `pokem` with a server configured will send a PUT request to the server. On a failure, it will fallback to trying with a a Matrix login.
+3. `pokem` with a server configured will send a PUT request to the server.
 4. If there is a Matrix login configured, the CLI will attempt to login to Matrix itself.
 
 Here is the config file skeleton.
@@ -122,7 +125,7 @@ rooms:
   discord: "!RoomBridgedToDiscord:jackson.dev"
 
 # Optional, define the server to send messages to
-# If configured, `pokem` will first try to query this server to send the message
+# If configured, `pokem` will first try to query this server to send" the message
 # Will use pokem.jackson.dev by default
 server:
   url: https://pokem.jackson.dev
@@ -138,7 +141,7 @@ matrix:
   #password: ""
   # Optional, but necessary for use
   #allow_list: ".*"
-  # Optional, the max size of the room to message
+  # Optional, the max size of the room to join
   #room_size_limit: 5
   # Optional, customize the state directory for the Matrix login data
   # Defaults to $XDG_STATE_HOME/pokem
@@ -149,6 +152,22 @@ daemon:
   addr: "0.0.0.0"
   port: 80
 ```
+
+## Authentication
+
+You can configure a password from the Matrix side, so that poking a Matrix room would require a password.
+
+Sending `!pokem set password pokempassword` to the Matrix bot will set the password to "pokempassword".
+
+Once the password is set, the room will not be pinged unless the password is given at the beginning of the message, for example:
+
+```bash
+curl --fail pokem.jackson.dev/roomid -d "pokempassword poke the room"
+```
+
+If the password matches it will be stripped from the message and the rest of the message will be sent to the room.
+
+The password can be seen by anyone in the room by sending `!pokem info`, and it can be removed with `!pokem set password off`.
 
 ## Alternative Ideas
 

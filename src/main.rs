@@ -280,8 +280,8 @@ async fn connect(config: MatrixConfig) -> anyhow::Result<Bot> {
     bot.join_rooms_callback(Some(|room: matrix_sdk::Room| async move {
         error!("Joined room: {}", room.room_id().as_str());
         if can_message_room(&room).await {
-            room.send(RoomMessageEventContent::text_plain(
-                "Welcome to Pok'em!\n\nSend \".help\" to see available commands.",
+            room.send(RoomMessageEventContent::text_markdown(
+                "Welcome to Pok'em!\n\nSend `!pokem help` to see available commands.",
             ))
             .await
             .expect("Failed to send message");
@@ -497,6 +497,15 @@ async fn send_help(room: &Room) {
         )))
         .await
         .expect("Failed to send message");
+        let config = get_room_config(room).await;
+        if let Some(pass) = config.password {
+            room.send(RoomMessageEventContent::text_plain(format!(
+                "This Room's password is: {}",
+                pass
+            )))
+            .await
+            .expect("Failed to send message");
+        }
     }
 }
 
