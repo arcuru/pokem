@@ -268,6 +268,7 @@ async fn connect(config: MatrixConfig) -> anyhow::Result<Bot> {
         } else {
             config.command_prefix
         },
+        room_size_limit: config.room_size_limit,
     })
     .await;
 
@@ -476,27 +477,7 @@ async fn can_message_room(room: &Room) -> bool {
         );
         return false;
     }
-
-    // Check the room size
-    let room_size = room
-        .members(RoomMemberships::ACTIVE)
-        .await
-        .unwrap_or(Vec::new())
-        .len();
-
-    // Get the room size limit
-    let room_size_limit = GLOBAL_CONFIG
-        .lock()
-        .unwrap()
-        .as_ref()
-        .unwrap()
-        .matrix
-        .as_ref()
-        .unwrap()
-        .room_size_limit
-        .unwrap_or(std::usize::MAX);
-
-    room_size <= room_size_limit
+    true
 }
 
 /// Send the help message with the room id

@@ -1060,7 +1060,7 @@ dependencies = [
 [[package]]
 name = "headjack"
 version = "0.3.0"
-source = "git+https://github.com/arcuru/headjack.git?rev=5adbf2c3ce67520db803d609fbbbe19569bcd2a2#5adbf2c3ce67520db803d609fbbbe19569bcd2a2"
+source = "git+https://github.com/arcuru/headjack.git?rev=35b3c9358de5#35b3c9358de593b6fa6ab30cf7972f03f6a5b5ae"
 dependencies = [
  "anyhow",
  "dirs",
