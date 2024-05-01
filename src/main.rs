@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
+use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::{Room, RoomMemberships, RoomState};
 use serde::Deserialize;
 
@@ -432,6 +433,20 @@ async fn can_message_room(room: &Room) -> bool {
         return true;
     }
 
+    // Check if we're blocked from sending messages
+    if room
+        .tags()
+        .await
+        .unwrap_or_default()
+        .is_some_and(|x| x.contains_key(&"dev.pokem.block".into()))
+    {
+        error!(
+            "Blocked from sending messages to {}",
+            room.room_id().as_str()
+        );
+        return false;
+    }
+
     // Check the room size
     let room_size = room
         .members(RoomMemberships::ACTIVE)
@@ -682,6 +697,51 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
                     .expect("Failed to send message");
                 }
                 return Err(());
+            }
+            Ok(())
+        },
+    )
+    .await;
+
+    // Block Pok'em from sending messages to this room
+    bot.register_text_command(
+        "block",
+        "Block Pok'em from sending messages to this room.".to_string(),
+        |_, _, room| async move {
+            if can_message_room(&room).await {
+                // If we can't message the room we won't make any changes here
+                if room.set_tag("dev.pokem.block".into(), TagInfo::default()).await.is_ok() {
+                    room.send(RoomMessageEventContent::text_plain("Pok'em has been blocked from sending messages to this room.\nSend `.unblock` to allow messages again."))
+                        .await
+                        .expect("Failed to send message");
+                } else {
+                    room.send(RoomMessageEventContent::text_plain("ERROR: Failed to block myself."))
+                        .await
+                        .expect("Failed to send message");
+                }
+            }
+            Ok(())
+        },
+    )
+    .await;
+
+    // Unblock Pok'em from sending messages to this room
+    bot.register_text_command(
+        "unblock",
+        "Unblock Pok'em to allow notifications to this room.".to_string(),
+        |_, _, room| async move {
+            if room.remove_tag("dev.pokem.block".into()).await.is_ok() {
+                room.send(RoomMessageEventContent::text_plain(
+                    "Pok'em has been unblocked from sending messages to this room.",
+                ))
+                .await
+                .expect("Failed to send message");
+            } else {
+                room.send(RoomMessageEventContent::text_plain(
+                    "ERROR: Failed to unblock myself.",
+                ))
+                .await
+                .expect("Failed to send message");
             }
             Ok(())
         },
