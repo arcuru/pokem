@@ -699,8 +699,10 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
         Some("Poke the room".to_string()),
         |_, msg, room| async move {
             // Get the room and message
-            let mut args = msg.split_whitespace();
-            let _ = args.next(); // Ignore the command
+            let mut args = msg
+                .trim_start_matches(&get_command_prefix())
+                .split_whitespace();
+            args.next(); // Ignore the "poke"
             let room_id = args.next().unwrap_or_default();
             let message = args.collect::<Vec<&str>>().join(" ");
             error!("Room: {:?}, Message: {:?}", room_id, message);
