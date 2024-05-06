@@ -8,7 +8,7 @@ It can be run standalone, or it can run as a daemon and listen for HTTP requests
 
 That's it.
 
-If you want to use my default instance at https://pokem.jackson.dev, you don't need to install anything.
+If you want to use my default instance at [pokem.dev](https://pokem.dev), you don't need to install anything.
 
 It is built using [headjack](https://github.com/arcuru/headjack), a Matrix bot framework in Rust.
 
@@ -23,14 +23,14 @@ There is a public Matrix room available at [#pokem:jackson.dev](https://matrix.t
 
 ### Using the public server
 
-I run an endpoint and associated bot account at https://pokem.jackson.dev.
+I run an endpoint and associated bot account accessible at [pokem.dev](https://pokem.dev), with the bot running on my homeserver on [jackson.dev](https://jackson.dev).
 `pokem` will default to that instance if you have not configured the server settings.
 
-You can run your own instance (using `pokem --daemon`), but here I'll describe using pokem.jackson.dev
+You can run your own instance (using `pokem --daemon`), but here I'll describe using pokem.dev
 
 1. On Matrix, create a room and invite the bot account, [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev).
 2. Grab the Matrix Room Alias or ID from the welcome message or from your client.
-3. Run `curl --fail -d "Backup successful 😀" pokem.jackson.dev/<room id>`. Or use `pokem <room id> <message>`.
+3. Run `curl --fail -d "Backup successful 😀" pokem.dev/<room id>`. Or use `pokem <room id> <message>`.
 4. The `curl` or `pokem` commands will block until the message is sent, and will return an error if there is a problem.
 
 `pokem`, like `ntfy`, listens to HTTP PUT/POST requests, so it's easy to send a message.
@@ -39,12 +39,12 @@ If you'd like more examples of how to send messages, just look at the [ntfy docs
 If you use the `pokem` CLI, you can set a default room in the config file, and then you don't need to specify it in commands.
 `pokem Backup Successful 😀` will be all you need.
 
-The daemon also provides a webpage that will send messages for you, e.g. https://pokem.jackson.dev.
+The daemon also provides a webpage that will send messages for you, e.g. [pokem.dev](https://pokem.dev).
 For ease of use, you can use URLs with the Room ID so that you can generate easy links.
 
-Try it out! Send a message to https://pokem.jackson.dev/pokem-example:jackson.dev and you can see it in [#pokem-example:jackson.dev](https://matrix.to/#/#pokem-example:jackson.dev).
+Try it out! Send a message to https://pokem.dev/pokem-example:jackson.dev and you can see it in [#pokem-example:jackson.dev](https://matrix.to/#/#pokem-example:jackson.dev).
 
-You can also use the unique room id: https://pokem.jackson.dev/!JYrjsPjErpFSDdpwpI:jackson.dev, or a URI-encoded room-alias (with the Matrix standard '#') https://pokem.jackson.dev/%23pokem-example:jackson.dev.
+You can also use the unique room id: https://pokem.dev/!JYrjsPjErpFSDdpwpI:jackson.dev, or a URI-encoded room-alias (with the Matrix standard '#') https://pokem.dev/%23pokem-example:jackson.dev.
 '#' is a special URL character, you need to URI Encode it (as "%23") or just remove it from your request, as we will support "pokem-example:jackson.dev" as a room name.
 
 #### Limitations of [@pokem:jackson.dev](https://matrix.to/#/@pokem:jackson.dev)
@@ -64,7 +64,7 @@ Here are some example calls:
 # These three commands are all equivalent
 pokem !RoomID:jackson.dev Backup failed!
 pokem --room !RoomID:jackson.dev Backup failed!
-curl --fail -d "Backup failed!" pokem.jackson.dev/!RoomID:jackson.dev
+curl --fail -d "Backup failed!" pokem.dev/!RoomID:jackson.dev
 
 pokem Backup failed! # Will send to your configured default room
 pokem error Backup failed! # Will send to your configured room named "error"
@@ -105,7 +105,7 @@ Using your own bot account will require setup, otherwise there is no setup requi
 `pokem` the CLI tool runs down this list until it finds something to do:
 
 1. `pokem --daemon` runs it as a daemon, listening for HTTP messages.
-2. If there is no server or matrix login configured, it will send the request to the `pokem.jackson.dev` instance.
+2. If there is no server or matrix login configured, it will send the request to the `pokem.dev` instance.
 3. `pokem` with a server configured will send a PUT request to the server.
 4. If there is a Matrix login configured, the CLI will attempt to login to Matrix itself.
 
@@ -126,9 +126,9 @@ rooms:
 
 # Optional, define the server to send messages to
 # If configured, `pokem` will first try to query this server to send" the message
-# Will use pokem.jackson.dev by default
+# Will use pokem.dev by default
 server:
-  url: https://pokem.jackson.dev
+  url: https://pokem.dev
   # Optional, customize the port if necessary
   port: 80
 
@@ -162,7 +162,7 @@ Sending `!pokem set password pokempassword` to the Matrix bot will set the passw
 Once the password is set, the room will not be pinged unless the password is given at the beginning of the message, for example:
 
 ```bash
-curl --fail pokem.jackson.dev/roomid -d "pokempassword poke the room"
+curl --fail pokem.dev/roomid -d "pokempassword poke the room"
 ```
 
 If the password matches it will be stripped from the message and the rest of the message will be sent to the room.

@@ -211,9 +211,9 @@ async fn main() -> anyhow::Result<()> {
     if config.server.is_none() && config.matrix.is_none() {
         // The user has set neither server nor matrix config
         // Assume they want to use the public instance
-        info!("Sending request to pokem.jackson.dev");
+        info!("Sending request to pokem.dev");
         let server = ServerConfig {
-            url: "https://pokem.jackson.dev".to_string(),
+            url: "https://pokem.dev".to_string(),
             port: None,
         };
         match poke_server(&server, &room, &messages.join(" ")).await {
