@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0] - 2024-05-06
+
+### Bug Fixes
+
+- Fix the poke command
+
+### Documentation
+
+- Add a link to the public room
+- Point to example room
+- Fix link to example room
+- Update docs with alias and password change
+- Registering pokem.dev
+
+### Features
+
+- Allow_list the example room to always send
+- Allow using the room alias
+- Add a way to block/unblock rooms by Matrix message
+- Set passwords on rooms
+- Set !pokem as the command prefix for the daemon
+- Move room size limit checking into headjack
+
+### Miscellaneous Tasks
+
+- Change version to v0.3.0
+- Bump to 1.0.0
+- Cargo update
+- Nix flake update
+
 ## [0.2.1] - 2024-04-26
 
 ### Bug Fixes
