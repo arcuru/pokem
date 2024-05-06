@@ -15,7 +15,7 @@ name = "pokem"
 test = false
 
 [dependencies]
-headjack = { git = "https://github.com/arcuru/headjack.git", rev = "35b3c9358de5"}
+headjack = "0.4.0"
 anyhow = "1"
 is-terminal = "0.4.12"
 urlencoding = "2.1.3"
