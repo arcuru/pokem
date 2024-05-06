@@ -23,7 +23,7 @@ use hyper::body::Bytes;
 
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
-use hyper::StatusCode;
+use hyper::{HeaderMap, StatusCode};
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
@@ -246,7 +246,7 @@ async fn main() -> anyhow::Result<()> {
         let bot = connect(matrix).await?;
         GLOBAL_BOT.lock().unwrap().replace(bot.clone());
         // Ping the room
-        return ping_room(&bot, &room, &messages.join(" ")).await;
+        return ping_room(&bot, &room, None, &messages.join(" ")).await;
     }
 
     return Err(anyhow::anyhow!("Unable to send message"));
@@ -411,49 +411,94 @@ async fn get_room_from_name(bot: &Bot, name: &str) -> Option<Room> {
     None
 }
 
-/// Send a message to a room.
-async fn ping_room(bot: &Bot, room_id: &str, message: &str) -> anyhow::Result<()> {
-    if let Some(r) = get_room_from_name(bot, room_id).await {
-        // If we're in an invited state, we need to wait for the invite to be accepted
-        let mut delay = 2;
-        while r.state() == RoomState::Invited {
-            if delay > 60 {
-                return Err(anyhow::anyhow!("Failed to join room"));
+/// Validate the authentication token
+///
+/// Returns the message with the authentication token removed
+fn validate_authentication(
+    room_config: RoomConfig,
+    headers: &Option<HeaderMap>,
+    msg: &str,
+) -> anyhow::Result<String> {
+    if room_config.auth.is_some() {
+        // Check if the authentication token is in the headers
+        if let Some(h) = headers {
+            let token = {
+                // Allow both "authentication" and "auth"
+                if let Some(auth) = h.get("authentication") {
+                    auth.to_str().unwrap_or_default()
+                } else if let Some(auth) = h.get("auth") {
+                    auth.to_str().unwrap_or_default()
+                } else {
+                    ""
+                }
+            };
+            if token == room_config.auth.clone().unwrap() {
+                return Ok(msg.to_string());
             }
-            tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
-            delay *= 2;
         }
 
-        let mut msg = message;
+        // Allow the authentication token to be the first word in the message
 
-        // Check for a password
-        let room_config = get_room_config(&r).await;
-        if room_config.password.is_some() {
-            // Check if the message starts with the password
-            if !msg.starts_with(&room_config.password.clone().unwrap()) {
-                return Err(anyhow::anyhow!("Password required"));
-            }
-            // Remove the password and any leading whitespace
-            msg = msg
-                .trim_start_matches(&room_config.password.unwrap())
-                .trim_start();
+        // Check if the message starts with the password
+        if !msg.starts_with(&room_config.auth.clone().unwrap()) {
+            return Err(anyhow::anyhow!("Incorrect Authentication Token"));
         }
-
-        if can_message_room(&r).await {
-            if let Err(e) = r.send(RoomMessageEventContent::text_plain(msg)).await {
-                return Err(anyhow::anyhow!("Failed to send message: {}", e));
-            }
-        } else {
-            error!("Failed to send message");
-        }
-
-        return Ok(());
+        // Remove the password and any leading whitespace
+        Ok(msg
+            .trim_start_matches(&room_config.auth.unwrap())
+            .trim_start()
+            .to_string())
+    } else {
+        Ok(msg.to_string())
     }
-    error!("Failed to find room with name: {}", room_id);
-    Err(anyhow::anyhow!(
-        "Failed to find room with name: {}",
-        room_id
-    ))
+}
+
+/// Send a message to a room.
+async fn ping_room(
+    bot: &Bot,
+    room_id: &str,
+    headers: Option<HeaderMap>,
+    message: &str,
+) -> anyhow::Result<()> {
+    let r = get_room_from_name(bot, room_id).await;
+    if r.is_none() {
+        error!("Failed to find room with name: {}", room_id);
+        return Err(anyhow::anyhow!(
+            "Failed to find room with name: {}",
+            room_id
+        ));
+    }
+    let r = r.unwrap();
+
+    // If we're in an invited state, we need to wait for the invite to be accepted
+    let mut delay = 2;
+    while r.state() == RoomState::Invited {
+        if delay > 60 {
+            return Err(anyhow::anyhow!("Failed to join room"));
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(delay)).await;
+        delay *= 2;
+    }
+
+    let mut msg: String = message.to_string();
+
+    let room_config = get_room_config(&r).await;
+
+    // Validate the authentication token and remove it from the message
+    if let Ok(cleaned_msg) = validate_authentication(room_config, &headers, &msg) {
+        msg = cleaned_msg;
+    } else {
+        return Err(anyhow::anyhow!("Incorrect Authentication Token"));
+    }
+
+    if can_message_room(&r).await {
+        if let Err(e) = r.send(RoomMessageEventContent::text_plain(msg)).await {
+            return Err(anyhow::anyhow!("Failed to send message: {}", e));
+        }
+    } else {
+        error!("Failed to send message");
+    }
+    Ok(())
 }
 
 /// Check if we can message the room
@@ -498,9 +543,9 @@ async fn send_help(room: &Room) {
         .await
         .expect("Failed to send message");
         let config = get_room_config(room).await;
-        if let Some(pass) = config.password {
+        if let Some(pass) = config.auth {
             room.send(RoomMessageEventContent::text_plain(format!(
-                "This Room's password is: {}",
+                "This Room's Authentication token is: {}",
                 pass
             )))
             .await
@@ -520,6 +565,8 @@ async fn daemon_poke(
         Ok(room) => room.to_string(),
         Err(_) => room_id,
     };
+
+    let headers = request.headers().clone();
 
     // If it's a GET request, we'll serve a WebUI
     if request.method() == hyper::Method::GET {
@@ -632,7 +679,7 @@ async fn daemon_poke(
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, &message).await {
+    if let Err(e) = ping_room(&bot, &room_id, Some(headers), &message).await {
         error!("Failed to send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
@@ -710,7 +757,7 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
             // Get a copy of the bot
             let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-            if let Err(e) = ping_room(&bot, room_id, &message).await {
+            if let Err(e) = ping_room(&bot, room_id, None, &message).await {
                 error!("Failed to send message: {:?}", e);
                 if can_message_room(&room).await {
                     room.send(RoomMessageEventContent::text_plain(&format!(
@@ -777,7 +824,7 @@ async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     // Register command to set variables
     bot.register_text_command(
         "set",
-        Some("<block|password> <on|off|password>".to_string()),
+        Some("<block|auth> <on|off|token>".to_string()),
         Some("Configure settings for Pok'em in this room".to_string()),
         set_command,
     )
@@ -852,34 +899,34 @@ async fn set_command(_: matrix_sdk::ruma::OwnedUserId, msg: String, room: Room) 
                 "Invalid value, use 'on' or 'off'".to_string()
             }
         }
-        "password" | "pass" => {
-            // Set a password necessary to send a message.
-            // A password needs to be at the start of the text message
+        // TODO(2.0): Remove the pass/password allowances in 2.0, it's here for backwards compatibility
+        "auth" | "authentication" | "password" | "pass" => {
+            // Set an auth token necessary to send a message.
             if value.is_empty() {
                 format!(
-                    "Password cannot be empty\n`{}set password [off|password]`",
+                    "Token cannot be empty\n`{}set auth [off|token]`",
                     get_command_prefix()
                 )
             } else if value.to_lowercase() == "on" {
-                "Tried setting the password to 'on', that was probably an accident".to_string()
+                "Tried setting the Auth Token to 'on', that was probably an accident".to_string()
             } else if value.to_lowercase() == "off" {
-                room_config.password = None;
-                "Password removed".to_string()
+                room_config.auth = None;
+                "Auth Token removed".to_string()
             } else {
-                room_config.password = Some(value.to_string());
-                format!("Password set to {}", value).to_string()
+                room_config.auth = Some(value.to_string());
+                format!("Auth Token set to {}", value).to_string()
             }
         }
         _ => {
             let block_status = if room_config.block { "on" } else { "off" };
             format!(
                 "Usage:
-`{}set [block|pass] <on|off|password>`
+`{}set [block|auth] <on|off|token>`
 Current values:\n- block: {}{}",
                 get_command_prefix(),
                 block_status,
-                if let Some(password) = room_config.password.clone() {
-                    format!("\n- password: {}", password)
+                if let Some(token) = room_config.auth.clone() {
+                    format!("\n- Authentication Token: {}", token)
                 } else {
                     "".to_string()
                 }
@@ -893,10 +940,10 @@ Current values:\n- block: {}{}",
     Ok(())
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct RoomConfig {
     block: bool,
-    password: Option<String>,
+    auth: Option<String>,
 }
 
 /// Write the Room config into the tags
@@ -908,15 +955,18 @@ async fn set_room_config(room: &Room, config: RoomConfig) {
     } else {
         room.remove_tag("dev.pokem.block".into()).await.unwrap();
     }
-    // Grab the password from the option for ergonomics
-    let password = config.password.clone().unwrap_or("".to_string());
-    // Remove any existing password
+    // Grab the auth token from the option for ergonomics
+    let auth_token = config.auth.clone().unwrap_or("".to_string());
+    // Remove any existing auth token
     let mut placed = false;
     let tags = room.tags().await.unwrap_or_default();
     for (tag, _) in tags.unwrap_or_default() {
         if tag.to_string().starts_with("dev.pokem.pass.") {
-            if config.password.is_some()
-                && tag.to_string().trim_start_matches("dev.pokem.pass.") == password
+            // Old format, remove it, we'll be replacing with the new value
+            room.remove_tag(tag).await.unwrap();
+        } else if tag.to_string().starts_with("dev.pokem.auth.") {
+            if config.auth.is_some()
+                && tag.to_string().trim_start_matches("dev.pokem.auth.") == auth_token
             {
                 // Already in place
                 placed = true;
@@ -926,9 +976,9 @@ async fn set_room_config(room: &Room, config: RoomConfig) {
             }
         };
     }
-    if config.password.is_some() && !placed {
+    if config.auth.is_some() && !placed {
         room.set_tag(
-            format!("dev.pokem.pass.{}", password).into(),
+            format!("dev.pokem.auth.{}", auth_token).into(),
             TagInfo::default(),
         )
         .await
@@ -939,28 +989,52 @@ async fn set_room_config(room: &Room, config: RoomConfig) {
 // Get all the current set room configs from the tags.
 async fn get_room_config(room: &Room) -> RoomConfig {
     let mut config = RoomConfig::default();
-    // the tags to only things that start with "dev.pokem."
     let tags = room.tags().await.unwrap_or_default();
+    let mut should_update = false;
     for (tag, _) in tags.unwrap_or_default() {
         if tag.to_string() == "dev.pokem.block" {
             config.block = true;
-        } else if tag.to_string().starts_with("dev.pokem.pass.") {
-            if config.password.is_some() {
-                // We only want one password, this is a warning
-                // It probably means we failed to remove a password on a password change
+        } else if tag.to_string().starts_with("dev.pokem.auth.") {
+            if config.auth.is_some() {
+                // We only want one auth token, this is a warning
+                // It probably means we failed to remove a token on a change
                 error!(
-                    "Multiple passwords set for room: {}",
+                    "Multiple Auth Tokens set for room: {}",
                     room.room_id().as_str()
                 );
                 continue;
             }
-            // Get the password
-            config.password = Some(
+            // Get the auth token
+            config.auth = Some(
+                tag.to_string()
+                    .trim_start_matches("dev.pokem.auth.")
+                    .to_string(),
+            );
+        } else if tag.to_string().starts_with("dev.pokem.pass.") {
+            // TODO(2.0): Remove this in 2.0
+            // Old format, support for now
+            // It will be removed immediately and replaced
+            should_update = true;
+            if config.auth.is_some() {
+                // We only want one password, this is a warning
+                // It probably means we failed to remove a password on a password change
+                error!(
+                    "Multiple Auth Tokens set for room: {}",
+                    room.room_id().as_str()
+                );
+                continue;
+            }
+            // Get the auth token
+            config.auth = Some(
                 tag.to_string()
                     .trim_start_matches("dev.pokem.pass.")
                     .to_string(),
             );
         }
+    }
+    // Update the settings if there are old formatted auth tokens
+    if should_update {
+        set_room_config(room, config.clone()).await;
     }
     config
 }

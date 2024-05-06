@@ -155,19 +155,19 @@ daemon:
 
 ## Authentication
 
-You can configure a password from the Matrix side, so that poking a Matrix room would require a password.
+You can configure an Authentication token from the Matrix side, so that poking a Matrix room would require knowing the token.
 
-Sending `!pokem set password pokempassword` to the Matrix bot will set the password to "pokempassword".
+Sending `!pokem set auth pokempassword` to the Matrix bot will set the token to "pokempassword".
 
-Once the password is set, the room will not be pinged unless the password is given at the beginning of the message, for example:
+Once the token is set, the room will not be pinged unless the token is given in the HTTP headers, for example:
 
 ```bash
-curl --fail pokem.dev/roomid -d "pokempassword poke the room"
+curl --fail pokem.dev/roomid -d "poke the room" -H "Authentication: pokempassword"
 ```
 
-If the password matches it will be stripped from the message and the rest of the message will be sent to the room.
+If the token matches the message will be sent to the room, otherwise the request will fail.
 
-The password can be seen by anyone in the room by sending `!pokem info`, and it can be removed with `!pokem set password off`.
+The token can be seen by anyone in the room by sending `!pokem info`, and it can be removed with `!pokem set auth off`.
 
 ## Alternative Ideas
 
@@ -193,8 +193,9 @@ Here are some non-standard things you could do with this:
 
 ### Pros
 
-1. Secure room topics by default. Nobody else can subscribe to the messages even with the key (although they could _send_ them).
+1. Secure room topics by default. Nobody else can subscribe to the messages even with the key.
 2. You don't need a separate app, just use your existing Matrix client.
+3. Support for authentication tokens, so that nobody else can send messages to your room.
 
 ## Nix
 
