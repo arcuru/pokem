@@ -86,7 +86,9 @@ pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
             // Get a copy of the bot
             let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-            if let Err(e) = ping_room(&bot, room_id, None, &message).await {
+            if let Err(e) =
+                ping_room(&bot, room_id, &reqwest::header::HeaderMap::new(), &message).await
+            {
                 error!("Failed to send message: {:?}", e);
                 if can_message_room(&room).await {
                     room.send(RoomMessageEventContent::text_plain(&format!(
@@ -384,7 +386,7 @@ async fn daemon_poke(
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, Some(headers), &message).await {
+    if let Err(e) = ping_room(&bot, &room_id, &headers, &message).await {
         error!("Failed to send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)

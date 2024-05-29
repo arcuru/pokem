@@ -32,6 +32,10 @@ struct PokemArgs {
     #[arg(long, visible_alias = "auth")]
     authentication: Option<String>,
 
+    /// Formatting for the message. "markdown" or "plain".
+    #[arg(long)]
+    format: Option<String>,
+
     /// Message to send
     #[arg()]
     message: Option<Vec<String>>,
@@ -81,13 +85,14 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let headers = {
+        let mut headers = HeaderMap::new();
         if let Some(auth) = args.authentication.clone() {
-            let mut headers = HeaderMap::new();
             headers.insert("Authentication", auth.parse().unwrap());
-            Some(headers)
-        } else {
-            None
         }
+        if let Some(format) = args.format.clone() {
+            headers.insert("Format", format.parse().unwrap());
+        }
+        headers
     };
 
     let mut messages = args.message.clone().unwrap_or_default();
@@ -180,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
         let bot = connect(matrix).await?;
         GLOBAL_BOT.lock().unwrap().replace(bot.clone());
         // Ping the room
-        return ping_room(&bot, &room, headers, &messages.join(" ")).await;
+        return ping_room(&bot, &room, &headers, &messages.join(" ")).await;
     }
 
     return Err(anyhow::anyhow!("Unable to send message"));
@@ -190,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
 async fn poke_server(
     server: &ServerConfig,
     room: &str,
-    headers: &Option<reqwest::header::HeaderMap>,
+    headers: &reqwest::header::HeaderMap,
     message: &str,
 ) -> anyhow::Result<()> {
     // URI encode the room
@@ -212,13 +217,12 @@ async fn poke_server(
     };
 
     let client = reqwest::Client::new();
-    let res = {
-        let mut request = client.post(&url).body(message.to_owned());
-        if let Some(headers) = headers {
-            request = request.headers(headers.clone());
-        }
-        request.send().await?
-    };
+    let res = client
+        .post(&url)
+        .body(message.to_owned())
+        .headers(headers.clone())
+        .send()
+        .await?;
 
     if res.status().is_success() {
         let body = res.text().await?;

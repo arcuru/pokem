@@ -44,6 +44,10 @@ pub struct MatrixConfig {
     /// Set the command prefix.
     /// Defaults to "!pokem".
     pub command_prefix: Option<String>,
+
+    /// Default formatting for messages.
+    /// Will default to markdown text.
+    pub formatting: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]

@@ -171,7 +171,7 @@ pub async fn send_help(room: &Room) {
 pub async fn ping_room(
     bot: &Bot,
     room_id: &str,
-    headers: Option<HeaderMap>,
+    headers: &HeaderMap,
     message: &str,
 ) -> anyhow::Result<()> {
     let r = get_room_from_name(bot, room_id).await;
@@ -199,20 +199,54 @@ pub async fn ping_room(
     let room_config = get_room_config(&r).await;
 
     // Validate the authentication token and remove it from the message
-    if let Ok(cleaned_msg) = validate_authentication(room_config, &headers, &msg) {
+    if let Ok(cleaned_msg) = validate_authentication(room_config, headers, &msg) {
         msg = cleaned_msg;
     } else {
         return Err(anyhow::anyhow!("Incorrect Authentication Token"));
     }
 
+    // Get the message formatting
+    let msg = format_message(headers, &msg);
+
     if can_message_room(&r).await {
-        if let Err(e) = r.send(RoomMessageEventContent::text_plain(msg)).await {
+        if let Err(e) = r.send(msg).await {
             return Err(anyhow::anyhow!("Failed to send message: {}", e));
         }
     } else {
         error!("Failed to send message");
     }
     Ok(())
+}
+
+/// Get the appropriate message formatting.
+fn format_message(headers: &HeaderMap, msg: &str) -> RoomMessageEventContent {
+    // Get the default format from the config
+    let mut format = if let Some(default_format) = GLOBAL_CONFIG
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .matrix
+        .as_ref()
+        .unwrap()
+        .formatting
+        .clone()
+    {
+        default_format
+    } else {
+        "markdown".to_string()
+    };
+    if let Some(header_format) = headers.get("format") {
+        format = header_format.to_str().unwrap_or_default().to_string();
+    };
+    match format.to_lowercase().as_str() {
+        "markdown" => RoomMessageEventContent::text_markdown(msg),
+        "plain" => RoomMessageEventContent::text_plain(msg),
+        _ => {
+            error!("Unknown format: {}", format);
+            RoomMessageEventContent::text_markdown(msg)
+        }
+    }
 }
 
 /// Translate a provided room name into an actual Room struct.
@@ -280,25 +314,23 @@ pub async fn get_room_from_name(bot: &Bot, name: &str) -> Option<Room> {
 /// Returns the message with the authentication token removed
 pub fn validate_authentication(
     room_config: RoomConfig,
-    headers: &Option<HeaderMap>,
+    headers: &HeaderMap,
     msg: &str,
 ) -> anyhow::Result<String> {
     if room_config.auth.is_some() {
         // Check if the authentication token is in the headers
-        if let Some(h) = headers {
-            let token = {
-                // Allow both "authentication" and "auth"
-                if let Some(auth) = h.get("authentication") {
-                    auth.to_str().unwrap_or_default()
-                } else if let Some(auth) = h.get("auth") {
-                    auth.to_str().unwrap_or_default()
-                } else {
-                    ""
-                }
-            };
-            if token == room_config.auth.clone().unwrap() {
-                return Ok(msg.to_string());
+        let token = {
+            // Allow both "authentication" and "auth"
+            if let Some(auth) = headers.get("authentication") {
+                auth.to_str().unwrap_or_default()
+            } else if let Some(auth) = headers.get("auth") {
+                auth.to_str().unwrap_or_default()
+            } else {
+                ""
             }
+        };
+        if token == room_config.auth.clone().unwrap() {
+            return Ok(msg.to_string());
         }
 
         // Allow the authentication token to be the first word in the message
