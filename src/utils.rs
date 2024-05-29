@@ -229,7 +229,7 @@ fn format_message(headers: &HeaderMap, msg: &str) -> RoomMessageEventContent {
         .matrix
         .as_ref()
         .unwrap()
-        .formatting
+        .format
         .clone()
     {
         default_format

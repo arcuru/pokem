@@ -147,6 +147,9 @@ matrix:
   # Optional, customize the state directory for the Matrix login data
   # Defaults to $XDG_STATE_HOME/pokem
   #state_dir:
+  # Optional, customize the default format used for messages
+  # Defaults to markdown, but can also be set to plain
+  #format: markdown
 
 # Optional, to define the bindings when running as a service
 daemon:
