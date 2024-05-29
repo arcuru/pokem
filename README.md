@@ -164,6 +164,7 @@ Once the token is set, the room will not be pinged unless the token is given in 
 
 ```bash
 curl --fail pokem.dev/roomid -d "poke the room" -H "Authentication: pokempassword"
+pokem --auth pokempassword --room roomid poke the room
 ```
 
 If the token matches the message will be sent to the room, otherwise the request will fail.

@@ -1,4 +1,5 @@
 use clap::Parser;
+use reqwest::header::HeaderMap;
 
 mod config;
 mod daemon;
@@ -26,6 +27,10 @@ struct PokemArgs {
     /// Run in daemon mode
     #[arg(short, long)]
     daemon: bool,
+
+    /// Authentication token
+    #[arg(long, visible_alias = "auth")]
+    authentication: Option<String>,
 
     /// Message to send
     #[arg()]
@@ -74,6 +79,16 @@ async fn main() -> anyhow::Result<()> {
         info!("Running in daemon mode");
         return daemon(&config.daemon).await;
     }
+
+    let headers = {
+        if let Some(auth) = args.authentication.clone() {
+            let mut headers = HeaderMap::new();
+            headers.insert("Authentication", auth.parse().unwrap());
+            Some(headers)
+        } else {
+            None
+        }
+    };
 
     let mut messages = args.message.clone().unwrap_or_default();
     let room = {
@@ -135,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
             url: "https://pokem.dev".to_string(),
             port: None,
         };
-        match poke_server(&server, &room, &messages.join(" ")).await {
+        match poke_server(&server, &room, &headers, &messages.join(" ")).await {
             Ok(_) => {
                 info!("Successfully sent message");
                 return Ok(());
@@ -148,7 +163,7 @@ async fn main() -> anyhow::Result<()> {
 
     if let Some(server) = config.server {
         info!("Sending request to server");
-        match poke_server(&server, &room, &messages.join(" ")).await {
+        match poke_server(&server, &room, &headers, &messages.join(" ")).await {
             Ok(_) => {
                 info!("Successfully sent message");
                 return Ok(());
@@ -165,14 +180,19 @@ async fn main() -> anyhow::Result<()> {
         let bot = connect(matrix).await?;
         GLOBAL_BOT.lock().unwrap().replace(bot.clone());
         // Ping the room
-        return ping_room(&bot, &room, None, &messages.join(" ")).await;
+        return ping_room(&bot, &room, headers, &messages.join(" ")).await;
     }
 
     return Err(anyhow::anyhow!("Unable to send message"));
 }
 
 /// Send a message to the server.
-async fn poke_server(server: &ServerConfig, room: &str, message: &str) -> anyhow::Result<()> {
+async fn poke_server(
+    server: &ServerConfig,
+    room: &str,
+    headers: &Option<reqwest::header::HeaderMap>,
+    message: &str,
+) -> anyhow::Result<()> {
     // URI encode the room
     let room = urlencoding::encode(room).to_string();
 
@@ -187,11 +207,18 @@ async fn poke_server(server: &ServerConfig, room: &str, message: &str) -> anyhow
     let url = if url.starts_with("http://") || url.starts_with("https://") {
         url
     } else {
-        format!("http://{}", url)
+        // https by default, don't encourage unencrypted traffic
+        format!("https://{}", url)
     };
 
     let client = reqwest::Client::new();
-    let res = client.post(&url).body(message.to_owned()).send().await?;
+    let res = {
+        let mut request = client.post(&url).body(message.to_owned());
+        if let Some(headers) = headers {
+            request = request.headers(headers.clone());
+        }
+        request.send().await?
+    };
 
     if res.status().is_success() {
         let body = res.text().await?;
