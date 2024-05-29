@@ -24,6 +24,7 @@ There is a public Matrix room available at [#pokem:jackson.dev](https://matrix.t
 ### Using the public server
 
 I run an endpoint and associated bot account accessible at [pokem.dev](https://pokem.dev), with the bot running on my homeserver on [jackson.dev](https://jackson.dev).
+`pokem.dev` is usually running the git main branch, instead of the latest release.
 `pokem` will default to that instance if you have not configured the server settings.
 
 You can run your own instance (using `pokem --daemon`), but here I'll describe using pokem.dev
