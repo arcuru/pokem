@@ -11,8 +11,8 @@ tasks:
     cmd: act
   ci:local:
     desc: Run CI locally
-    deps:
-      [audit, doc, fmt, test, nix:check, nix:build, clippy, pre-commit, build]
+    aliases: [ci, check]
+    deps: [doc, fmt, test, nix:check, nix:build, clippy, pre-commit, build]
   nix:check:
     desc: Run Nix CI checks
     sources:

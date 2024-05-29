@@ -30,6 +30,12 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    # A faster nix flake check command
+    nix-fast-build = {
+      url = "github:Mic92/nix-fast-build";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {self, ...} @ inputs:
@@ -166,6 +172,9 @@
 
           # Code coverage
           cargo-tarpaulin
+
+          # Speed up nix builds
+          inputs.nix-fast-build.packages.${system}.nix-fast-build
         ];
 
         # Many tools read this to find the sources for rust stdlib
