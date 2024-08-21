@@ -93,6 +93,32 @@ Running Pok'em as a daemon has several advantages, but it is perfectly usable to
 2. It will also be continuously available to respond to Room Invites and help request messages.
 3. You can skip installing `pokem` locally, which is especially useful to be pinged from a CI job.
 
+#### Docker Setup
+
+The Pok'em daemon is available as a Docker image on [Docker Hub](https://hub.docker.com/r/arcuru/pokem).
+Here's a Docker Compose example:
+
+```yaml
+services:
+  pokem:
+    image: arcuru/pokem:main # Set to your desired version
+    volumes:
+    # Mount your config file to /config.yaml
+     - ./config.yaml:/config.yaml
+     # Recommended: Persist the logged in session
+     # You will need to set the state directory to this location in the config file
+     # e.g.
+     #   matrix:
+     #     state_dir: /state
+     - pokem-state:/state
+    network_mode: host
+
+volumes:
+  # Persists the logged in session
+  pokem-state:
+```
+
+
 ## Install
 
 `pokem` is only packaged on crates.io, so installing it needs to be done via `cargo install pokem` or from git.
@@ -126,7 +152,7 @@ rooms:
   discord: "!RoomBridgedToDiscord:jackson.dev"
 
 # Optional, define the server to send messages to
-# If configured, `pokem` will first try to query this server to send" the message
+# If configured, `pokem` will first try to query this server to send the message
 # Will use pokem.dev by default
 server:
   url: https://pokem.dev
