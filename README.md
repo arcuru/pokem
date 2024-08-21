@@ -103,21 +103,20 @@ services:
   pokem:
     image: arcuru/pokem:main # Set to your desired version
     volumes:
-    # Mount your config file to /config.yaml
-     - ./config.yaml:/config.yaml
-     # Recommended: Persist the logged in session
-     # You will need to set the state directory to this location in the config file
-     # e.g.
-     #   matrix:
-     #     state_dir: /state
-     - pokem-state:/state
+      # Mount your config file to /config.yaml
+      - ./config.yaml:/config.yaml
+      # Recommended: Persist the logged in session
+      # You will need to set the state directory to this location in the config file
+      # e.g.
+      #   matrix:
+      #     state_dir: /state
+      - pokem-state:/state
     network_mode: host
 
 volumes:
   # Persists the logged in session
   pokem-state:
 ```
-
 
 ## Install
 
