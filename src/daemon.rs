@@ -8,8 +8,7 @@ use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::Room;
 
 use tokio::sync::RwLock;
-use tracing::debug;
-use tracing::error;
+use tracing::{debug, error};
 
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
