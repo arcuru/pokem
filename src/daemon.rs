@@ -7,9 +7,12 @@ use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::Room;
 
+use tokio::sync::RwLock;
 use tracing::error;
 
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 
 use http_body_util::BodyExt;
 use http_body_util::Full;
@@ -24,9 +27,12 @@ use tokio::net::TcpListener;
 
 /// Run in daemon mode
 /// This binds to a port and listens for incoming requests, and sends them to the Matrix room
-pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
+pub async fn daemon(
+    config: Option<DaemonConfig>,
+    rooms: Option<HashMap<String, String>>,
+) -> anyhow::Result<()> {
     let addr = {
-        if let Some(daemon) = config {
+        if let Some(daemon) = &config {
             let ip_addr: IpAddr = daemon
                 .addr
                 .clone()
@@ -162,6 +168,7 @@ pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
     .await;
 
     // Spawn a tokio task to continuously accept incoming connections
+    let rooms = Arc::new(RwLock::new(rooms));
     tokio::task::spawn(async move {
         // We start a loop to continuously accept incoming connections
         loop {
@@ -179,9 +186,10 @@ pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
             let io = TokioIo::new(stream);
 
             // Spawn a tokio task to serve each connection concurrently
+            let cloned_rooms = rooms.clone();
             tokio::task::spawn(async move {
                 if let Err(err) = http1::Builder::new()
-                    .serve_connection(io, service_fn(daemon_poke))
+                    .serve_connection(io, service_fn(|req| daemon_poke(req, cloned_rooms.clone())))
                     .await
                 {
                     eprintln!("Error serving connection: {:?}", err);
@@ -264,13 +272,21 @@ Current values:\n- block: {}{}",
 /// Poke the room from an http request
 async fn daemon_poke(
     request: Request<hyper::body::Incoming>,
+    rooms: Arc<RwLock<Option<HashMap<String, String>>>>,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     // The uri without the leading / will be the room id
     let room_id = request.uri().path().trim_start_matches('/').to_string();
     // The room_id may be URI encoded
-    let room_id = match urlencoding::decode(&room_id) {
+    let mut room_id = match urlencoding::decode(&room_id) {
         Ok(room) => room.to_string(),
         Err(_) => room_id,
+    };
+
+    // If the room is a room name in the config, we'll transform it to the room id
+    room_id = if let Some(room_id) = &rooms.read().await.as_ref().and_then(|r| r.get(&room_id)) {
+        room_id.to_string()
+    } else {
+        room_id
     };
 
     let headers = request.headers().clone();

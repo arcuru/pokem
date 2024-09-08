@@ -81,7 +81,7 @@ async fn main() -> anyhow::Result<()> {
     if args.daemon {
         // Daemon mode ignores all the other arguments
         info!("Running in daemon mode");
-        return daemon(&config.daemon).await;
+        return daemon(config.daemon, config.rooms).await;
     }
 
     let headers = {
