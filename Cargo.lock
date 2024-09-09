@@ -1066,8 +1066,7 @@ dependencies = [
 [[package]]
 name = "headjack"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a056f945e90d6af1eb06fccfe12f99208380d40a9fc5e4d749b925de3afba76c"
+source = "git+https://github.com/arcuru/headjack?rev=ff28628d7e349819fda7f43c52fff47beb502d50#ff28628d7e349819fda7f43c52fff47beb502d50"
 dependencies = [
  "anyhow",
  "dirs",
