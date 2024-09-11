@@ -147,8 +147,11 @@ rooms:
   # e.g. `pokem The backup failed!` will send to the default room
   default: "!RoomID:jackson.dev"
   error: "!ErrorRoom:jackson.dev"
-  fullteam: "!RoomWithFullTeam:jackson.dev"
   discord: "!RoomBridgedToDiscord:jackson.dev"
+  fullteam: "!RoomWithFullTeam:jackson.dev"
+  # Messages that come with the "urgent" tag sent to "fullteam" will go to "fullteam-urgent", if
+  # it exists, otherwise they will be sent to "fullteam" with a "@room" ping
+  fullteam-urgent: "!RoomWithFullTeamUrgent:jackson.dev"
 
 # Optional, define the server to send messages to
 # If configured, `pokem` will first try to query this server to send the message

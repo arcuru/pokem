@@ -8,6 +8,7 @@ use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::Room;
 
 use tokio::sync::RwLock;
+use tracing::debug;
 use tracing::error;
 
 use std::collections::HashMap;
@@ -87,7 +88,7 @@ pub async fn daemon(
             args.next(); // Ignore the "poke"
             let room_id = args.next().unwrap_or_default();
             let message = args.collect::<Vec<&str>>().join(" ");
-            error!("Room: {:?}, Message: {:?}", room_id, message);
+            debug!("Room: {:?}, Message: {:?}", room_id, message);
 
             // Get a copy of the bot
             let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
@@ -286,17 +287,50 @@ async fn daemon_poke(
         Err(_) => room_id,
     };
 
-    // If the room is a room name in the config, we'll transform it to the room id
-    room_id = if let Some(room_id) = &rooms.read().await.as_ref().and_then(|r| r.get(&room_id)) {
-        room_id.to_string()
-    } else {
-        room_id
+    let headers = &request.headers().clone();
+    let urgent = headers
+        .get("x-priority")
+        .and_then(|priority_header| {
+            priority_header.to_str().ok().map(|header_str| {
+                ["urgent", "max", "high"].contains(&header_str.to_lowercase().as_str())
+            })
+        })
+        .unwrap_or(false);
+
+    let is_get = request.method() == hyper::Method::GET;
+
+    // The request body will be the message
+    // Transform the body into a string
+    let body_bytes = request.collect().await?.to_bytes();
+    let mut message = String::from_utf8(body_bytes.to_vec()).unwrap();
+    error!("Room: {:?}, Message: {:?}", room_id, message);
+
+    // If the room is a room name in the config, we'll transform it to the room id.
+    // If the message is urgent and <room_name>-urgent exists, it will got there, otherwise
+    // we ping the entire @room.
+    room_id = match &rooms.read().await.as_ref().and_then(|r| {
+        if urgent {
+            r.get(&format!("{}-urgent", room_id)).or_else(|| {
+                // No urgent room found, pinging @room
+                message.push_str(" @room");
+                r.get(&room_id)
+            })
+        } else {
+            r.get(&room_id)
+        }
+    }) {
+        Some(room_id) => room_id.to_string(),
+        _ => {
+            // No urgent room found, pinging @room
+            if urgent {
+                message.push_str(" @room");
+            }
+            room_id
+        }
     };
 
-    let headers = request.headers().clone();
-
     // If it's a GET request, we'll serve a WebUI
-    if request.method() == hyper::Method::GET {
+    if is_get {
         // Create the webpage with the room id filled in
         let page = r#"
 <!DOCTYPE html>
@@ -397,16 +431,11 @@ async fn daemon_poke(
             .body(Full::new(Bytes::from(page)))
             .unwrap());
     }
-    // The request body will be the message
-    // Transform the body into a string
-    let body_bytes = request.collect().await?.to_bytes();
-    let message = String::from_utf8(body_bytes.to_vec()).unwrap();
-    error!("Room: {:?}, Message: {:?}", room_id, message);
 
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, &headers, &message).await {
+    if let Err(e) = ping_room(&bot, &room_id, headers, &message).await {
         error!("Failed to send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
