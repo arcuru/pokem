@@ -192,7 +192,11 @@ pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
 
     // Run the bot and block
     // It never exits
-    bot.run().await
+    loop {
+        if let Err(e) = bot.run().await {
+            error!("Bot restarting after it exited with error: {e}");
+        }
+    }
 }
 
 /// Sets config options for the room
