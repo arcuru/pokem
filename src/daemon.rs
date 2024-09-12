@@ -2,6 +2,7 @@
 use crate::config::*;
 use crate::utils::*;
 
+use clap::error::Result;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::ruma::events::tag::TagInfo;
@@ -24,6 +25,14 @@ use hyper::StatusCode;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
+
+#[derive(Debug, Clone, Default)]
+struct PokeRequest {
+    title: Option<String>,
+    message: Option<String>,
+    priority: Option<u8>,
+    tags: Option<Vec<String>>,
+}
 
 /// Run in daemon mode
 /// This binds to a port and listens for incoming requests, and sends them to the Matrix room
@@ -286,23 +295,55 @@ async fn daemon_poke(
         Err(_) => room_id,
     };
 
-    let headers = &request.headers().clone();
-    let urgent = headers
-        .get("x-priority")
-        .and_then(|priority_header| {
-            priority_header.to_str().ok().map(|header_str| {
-                ["urgent", "max", "high"].contains(&header_str.to_lowercase().as_str())
-            })
+    let query_params: HashMap<String, String> = request
+        .uri()
+        .query()
+        .map(|v| {
+            url::form_urlencoded::parse(v.as_bytes())
+                .map(|(a, b)| (a.to_lowercase(), b.to_string()))
+                .collect()
         })
-        .unwrap_or(false);
+        .unwrap_or_default();
+    let poke_request = PokeRequest {
+        title: query_params.get("title").cloned(),
+        message: query_params.get("message").cloned(),
+        priority: query_params.get("priority").and_then(|p| p.parse().ok()),
+        tags: query_params
+            .get("tags")
+            .cloned()
+            .map(|tags_str| tags_str.split(',').map(String::from).collect()),
+    };
+
+    let headers = &request.headers().clone();
+
+    let urgent = match poke_request.priority {
+        Some(p) => p > 3,
+        None => headers
+            .get("x-priority")
+            .and_then(|priority_header| {
+                priority_header
+                    .to_str()
+                    .ok()
+                    .map(|header_str| header_str.to_lowercase() == "urgent")
+            })
+            .unwrap_or(false),
+    };
 
     let is_get = request.method() == hyper::Method::GET;
 
-    // The request body will be the message
-    // Transform the body into a string
-    let body_bytes = request.collect().await?.to_bytes();
-    let mut message = String::from_utf8(body_bytes.to_vec()).unwrap();
-    error!("Room: {:?}, Message: {:?}", room_id, message);
+    let mut message = match poke_request.message {
+        Some(m) => m,
+        None => {
+            // The request body will be the message
+            // Transform the body into a string
+            let body_bytes = request.collect().await?.to_bytes();
+            String::from_utf8(body_bytes.to_vec()).expect("eror while decofing UTF-8")
+            // TODO: do not crash here
+        }
+    };
+    if let Some(title) = poke_request.title {
+        message = format!("**{title}**\n\n{message}");
+    }
 
     // If the room is a room name in the config, we'll transform it to the room id.
     // If the message is urgent and <room_name>-urgent exists, it will got there, otherwise
