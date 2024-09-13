@@ -3,6 +3,7 @@ use crate::config::*;
 use crate::utils::*;
 
 use clap::error::Result;
+use emojis::Emoji;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::ruma::events::tag::TagInfo;
@@ -31,7 +32,7 @@ struct PokeRequest {
     title: Option<String>,
     message: Option<String>,
     priority: Option<u8>,
-    tags: Option<Vec<String>>,
+    tags: Vec<String>,
 }
 
 impl PokeRequest {
@@ -69,7 +70,13 @@ impl PokeRequest {
             tags: query_params
                 .get("tags")
                 .cloned()
-                .map(|tags_str| tags_str.split(',').map(String::from).collect()),
+                .or_else(|| {
+                    headers
+                        .get("x-tags")
+                        .and_then(|tags| tags.to_str().ok().map(String::from))
+                })
+                .map(|tags_str| tags_str.split(',').map(String::from).collect())
+                .unwrap_or_default(),
         };
         poke_request
     }
@@ -354,8 +361,25 @@ async fn daemon_poke(
             // TODO: do not crash here
         }
     };
+
+    // Add title
     if let Some(title) = poke_request.title {
         message = format!("**{title}**\n\n{message}");
+    }
+
+    // Add emojis
+    let emojis_vec: Vec<&'static Emoji> = poke_request
+        .tags
+        .iter()
+        .filter_map(|shortcode| emojis::get_by_shortcode(shortcode.as_str()))
+        .collect();
+    let emojis_str = emojis_vec
+        .iter()
+        .map(|e| e.to_string())
+        .collect::<Vec<String>>()
+        .join("");
+    if !emojis_str.is_empty() {
+        message = format!("{emojis_str} {message}");
     }
 
     // If the room is a room name in the config, we'll transform it to the room id.
