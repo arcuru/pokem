@@ -34,6 +34,47 @@ struct PokeRequest {
     tags: Option<Vec<String>>,
 }
 
+impl PokeRequest {
+    pub fn from_request(request: &Request<hyper::body::Incoming>) -> Self {
+        let headers = &request.headers();
+        let query_params: HashMap<String, String> = request
+            .uri()
+            .query()
+            .map(|v| {
+                url::form_urlencoded::parse(v.as_bytes())
+                    .map(|(a, b)| (a.to_lowercase(), b.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let poke_request = PokeRequest {
+            title: query_params.get("title").cloned(),
+            message: query_params.get("message").cloned(),
+            priority: query_params
+                .get("priority")
+                .and_then(|p| p.parse().ok())
+                .or_else(|| {
+                    headers.get("x-priority").and_then(|priority_header| {
+                        priority_header.to_str().ok().map(|header_str| {
+                            match &header_str.to_lowercase()[..] {
+                                "min" => 1,
+                                "low" => 2,
+                                "default" => 3,
+                                "high" => 4,
+                                "urgent" | "max" => 5,
+                                _ => 3,
+                            }
+                        })
+                    })
+                }),
+            tags: query_params
+                .get("tags")
+                .cloned()
+                .map(|tags_str| tags_str.split(',').map(String::from).collect()),
+        };
+        poke_request
+    }
+}
+
 /// Run in daemon mode
 /// This binds to a port and listens for incoming requests, and sends them to the Matrix room
 pub async fn daemon(
@@ -295,39 +336,11 @@ async fn daemon_poke(
         Err(_) => room_id,
     };
 
-    let query_params: HashMap<String, String> = request
-        .uri()
-        .query()
-        .map(|v| {
-            url::form_urlencoded::parse(v.as_bytes())
-                .map(|(a, b)| (a.to_lowercase(), b.to_string()))
-                .collect()
-        })
-        .unwrap_or_default();
-    let poke_request = PokeRequest {
-        title: query_params.get("title").cloned(),
-        message: query_params.get("message").cloned(),
-        priority: query_params.get("priority").and_then(|p| p.parse().ok()),
-        tags: query_params
-            .get("tags")
-            .cloned()
-            .map(|tags_str| tags_str.split(',').map(String::from).collect()),
-    };
+    let poke_request = PokeRequest::from_request(&request);
 
-    let headers = &request.headers().clone();
+    let headers = request.headers().clone();
 
-    let urgent = match poke_request.priority {
-        Some(p) => p > 3,
-        None => headers
-            .get("x-priority")
-            .and_then(|priority_header| {
-                priority_header
-                    .to_str()
-                    .ok()
-                    .map(|header_str| header_str.to_lowercase() == "urgent")
-            })
-            .unwrap_or(false),
-    };
+    let urgent = poke_request.priority.is_some_and(|p| p > 3);
 
     let is_get = request.method() == hyper::Method::GET;
 
@@ -475,8 +488,8 @@ async fn daemon_poke(
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, headers, &message).await {
-        error!("Failed to send message: {:?}", e);
+    if let Err(e) = ping_room(&bot, &room_id, &headers, &message).await {
+        error!("Failed o send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Full::new(Bytes::from_static(b"Failed to send message")))
