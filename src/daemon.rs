@@ -48,7 +48,11 @@ impl PokeRequest {
             })
             .unwrap_or_default();
         let poke_request = PokeRequest {
-            title: query_params.get("title").cloned(),
+            title: query_params.get("title").cloned().or_else(|| {
+                headers
+                    .get("x-title")
+                    .and_then(|tags| tags.to_str().ok().map(String::from))
+            }),
             message: query_params.get("message").cloned(),
             priority: query_params
                 .get("priority")
