@@ -35,7 +35,7 @@ struct PokeRequest {
     title: Option<String>,
     message: String,
     priority: Option<u8>,
-    tags: Vec<String>,
+    tags: Option<Vec<String>>,
 }
 
 impl PokeRequest {
@@ -100,8 +100,7 @@ impl PokeRequest {
                             .get("x-tags")
                             .and_then(|tags| tags.to_str().ok().map(String::from))
                     })
-                    .map(|tags_str| tags_str.split(',').map(String::from).collect())
-                    .unwrap_or_default(),
+                    .map(|tags_str| tags_str.split(',').map(String::from).collect()),
             });
         };
         Ok(poke_request)
@@ -379,18 +378,19 @@ async fn daemon_poke(
     }
 
     // Add emojis
-    let emojis_vec: Vec<&'static Emoji> = poke_request
-        .tags
-        .iter()
-        .filter_map(|shortcode| emojis::get_by_shortcode(shortcode.as_str()))
-        .collect();
-    let emojis_str = emojis_vec
-        .iter()
-        .map(|e| e.to_string())
-        .collect::<Vec<String>>()
-        .join("");
-    if !emojis_str.is_empty() {
-        poke_request.message = format!("{emojis_str} {}", poke_request.message);
+    if let Some(tags) = poke_request.tags {
+        let emojis_vec: Vec<&'static Emoji> = tags
+            .iter()
+            .filter_map(|shortcode| emojis::get_by_shortcode(shortcode.as_str()))
+            .collect();
+        let emojis_str = emojis_vec
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<String>>()
+            .join("");
+        if !emojis_str.is_empty() {
+            poke_request.message = format!("{emojis_str} {}", poke_request.message);
+        }
     }
 
     // If the room is a room name in the config, we'll transform it to the room id.
