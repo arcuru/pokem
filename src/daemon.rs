@@ -53,7 +53,11 @@ impl PokeRequest {
                     .get("x-title")
                     .and_then(|tags| tags.to_str().ok().map(String::from))
             }),
-            message: query_params.get("message").cloned(),
+            message: query_params.get("message").cloned().or_else(|| {
+                headers
+                    .get("x-message")
+                    .and_then(|msg| msg.to_str().ok().map(String::from))
+            }),
             priority: query_params
                 .get("priority")
                 .and_then(|p| p.parse().ok())
