@@ -2,6 +2,7 @@
 use crate::config::*;
 use crate::utils::*;
 
+use anyhow::Context;
 use clap::error::Result;
 use emojis::Emoji;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
@@ -9,6 +10,7 @@ use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 use matrix_sdk::ruma::events::tag::TagInfo;
 use matrix_sdk::Room;
 
+use serde::Deserialize;
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
@@ -27,66 +29,82 @@ use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Deserialize)]
 struct PokeRequest {
+    topic: String,
     title: Option<String>,
-    message: Option<String>,
+    message: String,
     priority: Option<u8>,
     tags: Vec<String>,
 }
 
 impl PokeRequest {
-    pub fn from_request(request: &Request<hyper::body::Incoming>) -> Self {
-        let headers = &request.headers();
-        let query_params: HashMap<String, String> = request
-            .uri()
-            .query()
-            .map(|v| {
-                url::form_urlencoded::parse(v.as_bytes())
-                    .map(|(a, b)| (a.to_lowercase(), b.to_string()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        let poke_request = PokeRequest {
-            title: query_params.get("title").cloned().or_else(|| {
-                headers
-                    .get("x-title")
-                    .and_then(|tags| tags.to_str().ok().map(String::from))
-            }),
-            message: query_params.get("message").cloned().or_else(|| {
-                headers
-                    .get("x-message")
-                    .and_then(|msg| msg.to_str().ok().map(String::from))
-            }),
-            priority: query_params
-                .get("priority")
-                .and_then(|p| p.parse().ok())
-                .or_else(|| {
-                    headers.get("x-priority").and_then(|priority_header| {
-                        priority_header.to_str().ok().map(|header_str| {
-                            match &header_str.to_lowercase()[..] {
-                                "min" => 1,
-                                "low" => 2,
-                                "default" => 3,
-                                "high" => 4,
-                                "urgent" | "max" => 5,
-                                _ => 3,
-                            }
-                        })
-                    })
-                }),
-            tags: query_params
-                .get("tags")
-                .cloned()
-                .or_else(|| {
-                    headers
-                        .get("x-tags")
-                        .and_then(|tags| tags.to_str().ok().map(String::from))
+    /// Try to deserialize the request from JSON, otherwise build it from headers and body.
+    pub async fn from_request(request: Request<hyper::body::Incoming>) -> anyhow::Result<Self> {
+        // Try JSON deserialization
+        let headers = request.headers().clone();
+        let uri = request.uri().clone();
+
+        let body_bytes = request.collect().await?.to_bytes();
+        let body_str =
+            String::from_utf8(body_bytes.to_vec()).with_context(|| "error while decoding UTF-8")?;
+        let Ok(poke_request) = serde_json::from_str::<PokeRequest>(&body_str) else {
+            // Build from headers and body
+            let query_params: HashMap<String, String> = uri
+                .query()
+                .map(|v| {
+                    url::form_urlencoded::parse(v.as_bytes())
+                        .map(|(a, b)| (a.to_lowercase(), b.to_string()))
+                        .collect()
                 })
-                .map(|tags_str| tags_str.split(',').map(String::from).collect())
-                .unwrap_or_default(),
+                .unwrap_or_default();
+            return Ok(PokeRequest {
+                // The uri without the leading / will be the room id
+                topic: uri.path().trim_start_matches('/').to_string(),
+                title: query_params.get("title").cloned().or_else(|| {
+                    headers
+                        .get("x-title")
+                        .and_then(|tags| tags.to_str().ok().map(String::from))
+                }),
+                message: query_params
+                    .get("message")
+                    .cloned()
+                    .or_else(|| {
+                        headers
+                            .get("x-message")
+                            .and_then(|msg| msg.to_str().ok().map(String::from))
+                    })
+                    .unwrap_or(body_str),
+                priority: query_params
+                    .get("priority")
+                    .and_then(|p| p.parse().ok())
+                    .or_else(|| {
+                        headers.get("x-priority").and_then(|priority_header| {
+                            priority_header.to_str().ok().map(|header_str| {
+                                match &header_str.to_lowercase()[..] {
+                                    "min" => 1,
+                                    "low" => 2,
+                                    "default" => 3,
+                                    "high" => 4,
+                                    "urgent" | "max" => 5,
+                                    _ => 3,
+                                }
+                            })
+                        })
+                    }),
+                tags: query_params
+                    .get("tags")
+                    .cloned()
+                    .or_else(|| {
+                        headers
+                            .get("x-tags")
+                            .and_then(|tags| tags.to_str().ok().map(String::from))
+                    })
+                    .map(|tags_str| tags_str.split(',').map(String::from).collect())
+                    .unwrap_or_default(),
+            });
         };
-        poke_request
+        Ok(poke_request)
     }
 }
 
@@ -342,37 +360,22 @@ Current values:\n- block: {}{}",
 async fn daemon_poke(
     request: Request<hyper::body::Incoming>,
     rooms: Arc<RwLock<Option<HashMap<String, String>>>>,
-) -> Result<Response<Full<Bytes>>, hyper::Error> {
-    // The uri without the leading / will be the room id
-    let room_id = request.uri().path().trim_start_matches('/').to_string();
-    // The room_id may be URI encoded
-    let mut room_id = match urlencoding::decode(&room_id) {
-        Ok(room) => room.to_string(),
-        Err(_) => room_id,
-    };
-
-    let poke_request = PokeRequest::from_request(&request);
-
+) -> anyhow::Result<Response<Full<Bytes>>> {
     let headers = request.headers().clone();
+    let is_get = request.method() == hyper::Method::GET;
+    let mut poke_request = PokeRequest::from_request(request).await?;
+
+    // The room_id may be URI encoded
+    let mut room_id = match urlencoding::decode(&poke_request.topic) {
+        Ok(room) => room.to_string(),
+        Err(_) => poke_request.topic,
+    };
 
     let urgent = poke_request.priority.is_some_and(|p| p > 3);
 
-    let is_get = request.method() == hyper::Method::GET;
-
-    let mut message = match poke_request.message {
-        Some(m) => m,
-        None => {
-            // The request body will be the message
-            // Transform the body into a string
-            let body_bytes = request.collect().await?.to_bytes();
-            String::from_utf8(body_bytes.to_vec()).expect("eror while decofing UTF-8")
-            // TODO: do not crash here
-        }
-    };
-
     // Add title
     if let Some(title) = poke_request.title {
-        message = format!("**{title}**\n\n{message}");
+        poke_request.message = format!("**{title}**\n\n{}", poke_request.message);
     }
 
     // Add emojis
@@ -387,7 +390,7 @@ async fn daemon_poke(
         .collect::<Vec<String>>()
         .join("");
     if !emojis_str.is_empty() {
-        message = format!("{emojis_str} {message}");
+        poke_request.message = format!("{emojis_str} {}", poke_request.message);
     }
 
     // If the room is a room name in the config, we'll transform it to the room id.
@@ -397,7 +400,7 @@ async fn daemon_poke(
         if urgent {
             r.get(&format!("{}-urgent", room_id)).or_else(|| {
                 // No urgent room found, pinging @room
-                message.push_str(" @room");
+                poke_request.message.push_str(" @room");
                 r.get(&room_id)
             })
         } else {
@@ -408,7 +411,7 @@ async fn daemon_poke(
         _ => {
             // No urgent room found, pinging @room
             if urgent {
-                message.push_str(" @room");
+                poke_request.message.push_str(" @room");
             }
             room_id
         }
@@ -520,7 +523,7 @@ async fn daemon_poke(
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, &headers, &message).await {
+    if let Err(e) = ping_room(&bot, &room_id, &headers, &poke_request.message).await {
         error!("Failed o send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
