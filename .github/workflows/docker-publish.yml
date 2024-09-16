@@ -7,9 +7,6 @@ on:
       - "main"
     tags:
       - "v*"
-  pull_request:
-    branches:
-      - "main"
 
 jobs:
   docker:
@@ -37,6 +34,7 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD}}
 
+      # Only build amd64 if it's not a release
       - name: Determine Platforms
         id: platforms
         run: |
