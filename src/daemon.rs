@@ -91,7 +91,7 @@ pub async fn daemon(config: &Option<DaemonConfig>) -> anyhow::Result<()> {
             {
                 error!("Failed to send message: {:?}", e);
                 if can_message_room(&room).await {
-                    room.send(RoomMessageEventContent::text_plain(&format!(
+                    room.send(RoomMessageEventContent::text_plain(format!(
                         "Failed to send message: {:?}",
                         e
                     )))

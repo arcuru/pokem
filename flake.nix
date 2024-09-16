@@ -11,10 +11,7 @@
       };
     };
 
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    crane.url = "github:ipetkov/crane";
 
     flake-utils.url = "github:numtide/flake-utils";
 
@@ -52,7 +49,7 @@
       toolChain = fenixStable.completeToolchain;
 
       # Use the toolchain with the crane helper functions
-      craneLib = inputs.crane.lib.${system}.overrideToolchain toolChain;
+      craneLib = (inputs.crane.mkLib pkgs).overrideToolchain toolChain;
 
       # Clean the src to only have the Rust-relevant files
       # src = let
