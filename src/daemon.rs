@@ -64,6 +64,11 @@ impl PokeRequest {
                 title: query_params.get("title").cloned().or_else(|| {
                     headers
                         .get("x-title")
+                        .or_else(|| headers.get("X-Title"))
+                        .or_else(|| headers.get("Title"))
+                        .or_else(|| headers.get("title"))
+                        .or_else(|| headers.get("ti"))
+                        .or_else(|| headers.get("t"))
                         .and_then(|tags| tags.to_str().ok().map(String::from))
                 }),
                 message: query_params
@@ -72,6 +77,10 @@ impl PokeRequest {
                     .or_else(|| {
                         headers
                             .get("x-message")
+                            .or_else(|| headers.get("X-Message"))
+                            .or_else(|| headers.get("Message"))
+                            .or_else(|| headers.get("message"))
+                            .or_else(|| headers.get("m"))
                             .and_then(|msg| msg.to_str().ok().map(String::from))
                     })
                     .unwrap_or(body_str),
@@ -79,18 +88,27 @@ impl PokeRequest {
                     .get("priority")
                     .and_then(|p| p.parse().ok())
                     .or_else(|| {
-                        headers.get("x-priority").and_then(|priority_header| {
-                            priority_header.to_str().ok().map(|header_str| {
-                                match &header_str.to_lowercase()[..] {
-                                    "min" => 1,
-                                    "low" => 2,
-                                    "default" => 3,
-                                    "high" => 4,
-                                    "urgent" | "max" => 5,
-                                    _ => 3,
-                                }
+                        headers
+                            .get("x-priority")
+                            .or_else(|| headers.get("X-Priority"))
+                            .or_else(|| headers.get("Priority"))
+                            .or_else(|| headers.get("priority"))
+                            .or_else(|| headers.get("prio"))
+                            .or_else(|| headers.get("p"))
+                            .and_then(|priority_header| {
+                                priority_header.to_str().ok().map(|header_str| {
+                                    header_str.parse().unwrap_or_else(|_| {
+                                        match &header_str.to_lowercase()[..] {
+                                            "min" => 1,
+                                            "low" => 2,
+                                            "default" => 3,
+                                            "high" => 4,
+                                            "urgent" | "max" => 5,
+                                            _ => 3,
+                                        }
+                                    })
+                                })
                             })
-                        })
                     }),
                 tags: query_params
                     .get("tags")
@@ -98,6 +116,10 @@ impl PokeRequest {
                     .or_else(|| {
                         headers
                             .get("x-tags")
+                            .or_else(|| headers.get("X-Tags"))
+                            .or_else(|| headers.get("Tags"))
+                            .or_else(|| headers.get("tag"))
+                            .or_else(|| headers.get("ta"))
                             .and_then(|tags| tags.to_str().ok().map(String::from))
                     })
                     .map(|tags_str| tags_str.split(',').map(String::from).collect()),
@@ -174,8 +196,14 @@ pub async fn daemon(
             // Get a copy of the bot
             let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-            if let Err(e) =
-                ping_room(&bot, room_id, &reqwest::header::HeaderMap::new(), &message).await
+            if let Err(e) = ping_room(
+                &bot,
+                room_id,
+                &reqwest::header::HeaderMap::new(),
+                &message,
+                false,
+            )
+            .await
             {
                 error!("Failed to send message: {:?}", e);
                 if can_message_room(&room).await {
@@ -395,12 +423,13 @@ async fn daemon_poke(
 
     // If the room is a room name in the config, we'll transform it to the room id.
     // If the message is urgent and <room_name>-urgent exists, it will got there, otherwise
-    // we ping the entire @room.
+    // we mention the entire @room.
+    let mut mention_room = false;
     room_id = match &rooms.read().await.as_ref().and_then(|r| {
         if urgent {
             r.get(&format!("{}-urgent", room_id)).or_else(|| {
                 // No urgent room found, pinging @room
-                poke_request.message.push_str(" @room");
+                mention_room = true;
                 r.get(&room_id)
             })
         } else {
@@ -411,7 +440,7 @@ async fn daemon_poke(
         _ => {
             // No urgent room found, pinging @room
             if urgent {
-                poke_request.message.push_str(" @room");
+                mention_room = true;
             }
             room_id
         }
@@ -523,8 +552,16 @@ async fn daemon_poke(
     // Get a copy of the bot
     let bot = GLOBAL_BOT.lock().unwrap().as_ref().unwrap().clone();
 
-    if let Err(e) = ping_room(&bot, &room_id, &headers, &poke_request.message).await {
-        error!("Failed o send message: {:?}", e);
+    if let Err(e) = ping_room(
+        &bot,
+        &room_id,
+        &headers,
+        &poke_request.message,
+        mention_room,
+    )
+    .await
+    {
+        error!("Failed to send message: {:?}", e);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Full::new(Bytes::from_static(b"Failed to send message")))

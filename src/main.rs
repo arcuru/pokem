@@ -185,7 +185,7 @@ async fn main() -> anyhow::Result<()> {
         let bot = connect(matrix).await?;
         GLOBAL_BOT.lock().unwrap().replace(bot.clone());
         // Ping the room
-        return ping_room(&bot, &room, &headers, &messages.join(" ")).await;
+        return ping_room(&bot, &room, &headers, &messages.join(" "), false).await;
     }
 
     return Err(anyhow::anyhow!("Unable to send message"));

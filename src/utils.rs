@@ -5,6 +5,7 @@ use headjack::*;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::ruma::events::tag::TagInfo;
+use matrix_sdk::ruma::events::Mentions;
 use matrix_sdk::{Room, RoomMemberships, RoomState};
 
 use tracing::{error, info};
@@ -173,6 +174,7 @@ pub async fn ping_room(
     room_id: &str,
     headers: &HeaderMap,
     message: &str,
+    mention_room: bool,
 ) -> anyhow::Result<()> {
     let r = get_room_from_name(bot, room_id).await;
     if r.is_none() {
@@ -206,7 +208,10 @@ pub async fn ping_room(
     }
 
     // Get the message formatting
-    let msg = format_message(headers, &msg);
+    let mut msg = format_message(headers, &msg);
+    if mention_room {
+        msg = msg.add_mentions(Mentions::with_room_mention());
+    }
 
     if can_message_room(&r).await {
         if let Err(e) = r.send(msg).await {
