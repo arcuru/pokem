@@ -64,8 +64,6 @@ impl PokeRequest {
                 title: query_params.get("title").cloned().or_else(|| {
                     headers
                         .get("x-title")
-                        .or_else(|| headers.get("X-Title"))
-                        .or_else(|| headers.get("Title"))
                         .or_else(|| headers.get("title"))
                         .or_else(|| headers.get("ti"))
                         .or_else(|| headers.get("t"))
@@ -77,8 +75,6 @@ impl PokeRequest {
                     .or_else(|| {
                         headers
                             .get("x-message")
-                            .or_else(|| headers.get("X-Message"))
-                            .or_else(|| headers.get("Message"))
                             .or_else(|| headers.get("message"))
                             .or_else(|| headers.get("m"))
                             .and_then(|msg| msg.to_str().ok().map(String::from))
@@ -90,8 +86,6 @@ impl PokeRequest {
                     .or_else(|| {
                         headers
                             .get("x-priority")
-                            .or_else(|| headers.get("X-Priority"))
-                            .or_else(|| headers.get("Priority"))
                             .or_else(|| headers.get("priority"))
                             .or_else(|| headers.get("prio"))
                             .or_else(|| headers.get("p"))
@@ -116,8 +110,7 @@ impl PokeRequest {
                     .or_else(|| {
                         headers
                             .get("x-tags")
-                            .or_else(|| headers.get("X-Tags"))
-                            .or_else(|| headers.get("Tags"))
+                            .or_else(|| headers.get("tags"))
                             .or_else(|| headers.get("tag"))
                             .or_else(|| headers.get("ta"))
                             .and_then(|tags| tags.to_str().ok().map(String::from))
