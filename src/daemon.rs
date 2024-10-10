@@ -4,7 +4,6 @@ use crate::utils::*;
 
 use anyhow::Context;
 use clap::error::Result;
-use emojis::Emoji;
 use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 use matrix_sdk::ruma::events::tag::TagInfo;
@@ -400,17 +399,21 @@ async fn daemon_poke(
 
     // Add emojis
     if let Some(tags) = poke_request.tags {
-        let emojis_vec: Vec<&'static Emoji> = tags
-            .iter()
-            .filter_map(|shortcode| emojis::get_by_shortcode(shortcode.as_str()))
-            .collect();
-        let emojis_str = emojis_vec
-            .iter()
-            .map(|e| e.to_string())
-            .collect::<Vec<String>>()
-            .join("");
+        let mut emojis_str = String::new();
+        let mut non_emojis = Vec::new();
+        for shortcode in tags {
+            if let Some(emoji) = emojis::get_by_shortcode(shortcode.as_str()) {
+                emojis_str.push_str(emoji.as_ref());
+            } else {
+                non_emojis.push(shortcode);
+            }
+        }
         if !emojis_str.is_empty() {
             poke_request.message = format!("{emojis_str} {}", poke_request.message);
+        }
+        if !non_emojis.is_empty() {
+            poke_request.message =
+                format!("{}\nTags: {}", poke_request.message, non_emojis.join(", "));
         }
     }
 
