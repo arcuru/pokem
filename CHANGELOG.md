@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0](https://github.com/arcuru/pokem/compare/v1.0.0...v1.1.0) - 2024-10-25
+
+### Added
+
+- list non-emoji tags at the end of the message
+
+### Fixed
+
+- only need to check lowercase HTTP Headers
+
+### Other
+
+- install release-plz
+- Merge pull request [#10](https://github.com/arcuru/pokem/pull/10) from lazytanuki/urgent_rooms
+
 ## [1.0.0] - 2024-05-06
 
 ### Bug Fixes
