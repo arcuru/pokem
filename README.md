@@ -116,6 +116,11 @@ services:
       #     state_dir: /state
       - pokem-state:/state
     network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "1m"
+        max-file: "1"
 
 volumes:
   # Persists the logged in session
