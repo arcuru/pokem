@@ -19,5 +19,6 @@ jobs:
     uses: arcuru/actions/.github/workflows/flake-update.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
+      environment: automation
     secrets:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
