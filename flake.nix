@@ -170,6 +170,9 @@
           # Code coverage
           cargo-tarpaulin
 
+          # Dependency advisory + license checks (used by .github/workflows/security-audit.yml)
+          cargo-deny
+
           # Speed up nix builds
           inputs.nix-fast-build.packages.${system}.nix-fast-build
         ];
