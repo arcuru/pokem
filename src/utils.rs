@@ -322,33 +322,30 @@ pub fn validate_authentication(
     headers: &HeaderMap,
     msg: &str,
 ) -> anyhow::Result<String> {
-    if room_config.auth.is_some() {
+    if let Some(auth) = room_config.auth {
         // Check if the authentication token is in the headers
         let token = {
             // Allow both "authentication" and "auth"
-            if let Some(auth) = headers.get("authentication") {
-                auth.to_str().unwrap_or_default()
-            } else if let Some(auth) = headers.get("auth") {
-                auth.to_str().unwrap_or_default()
+            if let Some(h) = headers.get("authentication") {
+                h.to_str().unwrap_or_default()
+            } else if let Some(h) = headers.get("auth") {
+                h.to_str().unwrap_or_default()
             } else {
                 ""
             }
         };
-        if token == room_config.auth.clone().unwrap() {
+        if token == auth {
             return Ok(msg.to_string());
         }
 
         // Allow the authentication token to be the first word in the message
 
         // Check if the message starts with the password
-        if !msg.starts_with(&room_config.auth.clone().unwrap()) {
+        if !msg.starts_with(&auth) {
             return Err(anyhow::anyhow!("Incorrect Authentication Token"));
         }
         // Remove the password and any leading whitespace
-        Ok(msg
-            .trim_start_matches(&room_config.auth.unwrap())
-            .trim_start()
-            .to_string())
+        Ok(msg.trim_start_matches(&auth).trim_start().to_string())
     } else {
         Ok(msg.to_string())
     }

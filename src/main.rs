@@ -201,12 +201,9 @@ async fn poke_server(
     // URI encode the room
     let room = urlencoding::encode(room).to_string();
 
-    let url = {
-        if server.port.is_none() {
-            format!("{}/{}", server.url, room)
-        } else {
-            format!("{}:{}/{}", server.url, server.port.unwrap(), room)
-        }
+    let url = match server.port {
+        Some(port) => format!("{}:{}/{}", server.url, port, room),
+        None => format!("{}/{}", server.url, room),
     };
     // if url doesn't start with "http://" or "https://", add "http://" to the beginning
     let url = if url.starts_with("http://") || url.starts_with("https://") {
