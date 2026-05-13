@@ -34,4 +34,9 @@ jobs:
 
           export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/id_codeberg -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -o HostKeyAlgorithms=ssh-ed25519"
           git remote add mirror "$REMOTE"
-          git push --mirror --force --prune mirror
+          # Map refs/remotes/origin/* (what actions/checkout produces) to refs/heads/*
+          # on the destination. `git push --mirror` instead would push the
+          # remote-tracking refs verbatim (forgejo rejects refs outside
+          # refs/heads, refs/tags) AND prune real branches from codeberg
+          # because they don't exist locally as refs/heads/*.
+          git push --tags --force --prune mirror "+refs/remotes/origin/*:refs/heads/*"
