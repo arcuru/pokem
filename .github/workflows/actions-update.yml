@@ -21,5 +21,4 @@ jobs:
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation
-    secrets:
-      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    secrets: inherit
