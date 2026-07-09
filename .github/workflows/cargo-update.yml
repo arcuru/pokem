@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   cargo-update:
-    uses: arcuru/actions/.github/workflows/cargo-update.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/cargo-update.yml@c8144123ad5a2c6316b7becab8233b68dfa637d9 # v0.2.1
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation
