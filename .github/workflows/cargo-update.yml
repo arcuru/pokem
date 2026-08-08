@@ -1,3 +1,7 @@
+# Monthly cargo dependency update: runs `cargo update` to bump Cargo.lock and
+# opens a PR on the deps/cargo-update branch with a configurable hold period
+# before merge. Delegates to the arcuru/actions reusable workflow; CI verifies
+# via the normal PR checks.
 name: "Deps: Cargo Update"
 
 on:
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   cargo-update:
-    uses: arcuru/actions/.github/workflows/cargo-update.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/cargo-update.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation

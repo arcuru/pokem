@@ -1,3 +1,7 @@
+# Monthly GitHub Actions version update: bumps SHA-pinned `uses:` lines to
+# their latest releases and opens a PR on the deps/actions-update branch with
+# a configurable hold period before merge. Delegates to the arcuru/actions
+# reusable workflow; CI verifies via the normal PR checks.
 name: "Deps: Actions Update"
 
 on:
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   actions-update:
-    uses: arcuru/actions/.github/workflows/actions-update.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/actions-update.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation

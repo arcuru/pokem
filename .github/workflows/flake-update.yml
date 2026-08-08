@@ -1,3 +1,7 @@
+# Monthly Nix flake input update: runs `nix flake update` to bump flake.lock
+# and opens a PR on the deps/flake-update branch with a configurable hold
+# period before merge. Delegates to the arcuru/actions reusable workflow; CI
+# verifies via the normal PR checks.
 name: "Deps: Flake Update"
 
 on:
@@ -17,7 +21,7 @@ permissions:
 
 jobs:
   flake-update:
-    uses: arcuru/actions/.github/workflows/flake-update.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/flake-update.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation

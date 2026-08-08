@@ -1,3 +1,13 @@
+# Daily release of expired dependency holds: scans open PRs labeled "on-hold",
+# parses the hold-until date from the PR body, re-verifies the PR's pinned
+# actions, and removes the label once the date is reached. Removing the label
+# re-triggers the Hold Gate, which clears its own failing check. Delegates to
+# the arcuru/actions reusable workflow.
+#
+# The label removal needs PAT_TOKEN: a GITHUB_TOKEN-authored event does not
+# trigger other workflows, so the Hold Gate would never re-run and its check
+# would stay red. PAT_TOKEN is reachable only through `environment: automation`
+# plus `secrets: inherit`.
 name: "Deps: Hold Expiry"
 
 on:
@@ -6,9 +16,12 @@ on:
   workflow_dispatch:
 
 permissions:
+  contents: read
   pull-requests: write
-  checks: write
 
 jobs:
   update-hold:
-    uses: arcuru/actions/.github/workflows/update-hold.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/update-hold.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
+    with:
+      environment: automation
+    secrets: inherit

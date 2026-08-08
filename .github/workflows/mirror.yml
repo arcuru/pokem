@@ -1,0 +1,23 @@
+# Mirrors main to the self-hosted Forgejo instance after every push. Delegates
+# to the arcuru/actions reusable workflow, which pins the destination's host key
+# rather than trusting it on first use.
+name: Mirror
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    uses: arcuru/actions/.github/workflows/codeberg-mirror.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
+    with:
+      environment: mirror
+      destination: git@code.jackson.dev:arcuru/pokem.git
+      host: code.jackson.dev
+      host-key: "code.jackson.dev ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGUJI+z0l5QHNh9hqf1Wx3YD4qJ1a8fdDBRLtXp4bzqf"
+    secrets:
+      ssh-private-key: ${{ secrets.GIT_SSH_PRIVATE_KEY }}
