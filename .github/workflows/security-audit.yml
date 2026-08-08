@@ -1,3 +1,7 @@
+# Daily check of cargo dependencies against the RustSec Advisory Database.
+# Opens or updates a GitHub issue labeled "security" on failure and auto-closes
+# it when all advisories clear. Delegates to the arcuru/actions reusable
+# workflow.
 name: "Deps: Security Audit"
 
 on:
@@ -11,4 +15,4 @@ permissions:
 
 jobs:
   audit:
-    uses: arcuru/actions/.github/workflows/security-audit.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/security-audit.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0

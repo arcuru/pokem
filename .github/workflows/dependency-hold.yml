@@ -1,3 +1,7 @@
+# Required status check that blocks merging dependency-update PRs during their
+# hold period: passes immediately for non-deps/ branches and fails while the PR
+# still carries the "on-hold" label. Delegates to the arcuru/actions reusable
+# workflow.
 name: "Deps: Hold Gate"
 
 on:
@@ -11,4 +15,4 @@ permissions:
 
 jobs:
   hold:
-    uses: arcuru/actions/.github/workflows/dependency-hold.yml@a7c938293186c1ba82fc32921d10c71734d1d21c # v0.1.0
+    uses: arcuru/actions/.github/workflows/dependency-hold.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0

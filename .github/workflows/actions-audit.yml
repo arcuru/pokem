@@ -1,0 +1,22 @@
+# Daily security audit of this repository's GitHub Actions usage: re-resolves
+# each SHA pin against its upstream tag and the GitHub Advisory Database, and
+# audits the workflow definitions with zizmor's online rules, uploading SARIF to
+# code scanning. Opens or updates a GitHub issue labeled "security" on findings
+# and auto-closes it when they clear. Delegates to the arcuru/actions reusable
+# workflow.
+name: "Deps: Actions Audit"
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  # The called job's SARIF upload needs this; granting less here fails the run.
+  security-events: write
+
+jobs:
+  audit:
+    uses: arcuru/actions/.github/workflows/actions-audit.yml@ec6897e9561bdefa62d5eb364d49b41bcba122a5 # v0.4.0
