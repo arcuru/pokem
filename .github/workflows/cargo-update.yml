@@ -25,4 +25,3 @@ jobs:
     with:
       hold-days: ${{ inputs.hold_days || '7' }}
       environment: automation
-    secrets: inherit
