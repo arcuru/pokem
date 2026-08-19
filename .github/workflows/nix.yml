@@ -24,5 +24,8 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@908b263ff629f4cc17666315b7fd3ec127c6244d # v14
 
       - name: Check
-        # Runs all flake checks, which includes building the package
-        run: nix run github:Mic92/nix-fast-build -- --skip-cached --no-nom
+        # Runs all flake checks, which includes building the package.
+        # `--inputs-from .` resolves nixpkgs to this repo's locked flake, so
+        # CI runs the same nix-fast-build and nix-eval-jobs as the dev shell
+        # instead of tracking the tool's own upstream HEAD.
+        run: nix run --inputs-from . nixpkgs#nix-fast-build -- --skip-cached --no-nom
